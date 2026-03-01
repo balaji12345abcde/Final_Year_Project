@@ -28,4 +28,5 @@ urlpatterns = [
     path('api/login/',TokenObtainPairView.as_view()),
     path('api/token/refresh/',TokenRefreshView.as_view()),
     path('api/documents/',include('documents.urls')),
+    path('api/nlp/',include('nlp_engine.urls')),
 ]+static(settings.MEDIA_URL,document_root=settings.MEDIA_ROOT)
