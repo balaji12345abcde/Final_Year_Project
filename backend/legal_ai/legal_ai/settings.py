@@ -79,12 +79,8 @@ WSGI_APPLICATION = 'legal_ai.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'legal_ai_db',
-        'USER': 'root',
-        'PASSWORD': 'Balaji143Mahi',
-        'HOST': 'localhost',
-        'PORT': '3306',
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR/'db.sqlite3',
     }
 }
 

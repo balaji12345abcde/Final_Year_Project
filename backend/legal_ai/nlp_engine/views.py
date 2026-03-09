@@ -9,13 +9,13 @@ from .explainable_ai import explain_match
 from .models import AnalysisResult
 from .chatbot_engine import chatbot_response
 class AnalyzeDocumentView(APIView):
-    permission_classes=[IsAuthenticated]
+    permission_classes=[]
 
     def post(self,request):
         document_id=request.data.get("document_id")
         user_query=request.data.get("query","")
         try:
-            document=Document.objects.get(id=document_id,user=request.user)
+            document=Document.objects.get(id=document_id)
         except Document.DoesNotExist:
             return Response({"error":"Document not found"},status=404)
         result=hybrid_match(document.extracted_text)
