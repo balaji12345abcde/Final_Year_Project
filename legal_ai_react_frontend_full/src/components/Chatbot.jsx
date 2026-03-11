@@ -1,48 +1,61 @@
-import { useState } from "react"
+import {useState} from "react"
 
-export default function Chatbot(){
+function Chatbot(){
 
-const [message,setMessage] = useState("")
+const [msg,setMsg] = useState("")
 const [chat,setChat] = useState([])
 
-const sendMessage = ()=>{
+const send = ()=>{
 
-if(!message) return
+setChat([...chat,{q:msg,a:"AI response for "+msg}])
+setMsg("")
 
-setChat([...chat,{user:message,bot:"AI response for: "+message}])
-setMessage("")
 }
 
 return(
 
-<div className="fixed right-0 top-0 w-80 h-screen bg-white shadow-lg p-4">
+<div className="fixed right-0 bottom-0 w-80 bg-white shadow-lg p-4">
 
-<h2 className="font-bold mb-3">
-Legal AI Chatbot
-</h2>
+<h3 className="font-bold mb-2">
 
-<div className="h-96 overflow-y-auto border p-2 mb-2">
+Legal Chatbot
+
+</h3>
+
+<div className="h-60 overflow-y-auto">
 
 {chat.map((c,i)=>(
+
 <div key={i}>
-<p className="text-right text-blue-600">{c.user}</p>
-<p className="text-left text-gray-700">{c.bot}</p>
+
+<p className="text-blue-500">{c.q}</p>
+<p>{c.a}</p>
+
 </div>
+
 ))}
 
 </div>
 
 <input
-value={message}
-onChange={(e)=>setMessage(e.target.value)}
-className="border w-full p-2 mb-2"
+
+value={msg}
+onChange={(e)=>setMsg(e.target.value)}
+
+className="border w-full p-2 mt-2"
+
 />
 
 <button
-onClick={sendMessage}
-className="bg-blue-600 text-white w-full p-2 rounded"
+
+onClick={send}
+
+className="bg-blue-600 text-white w-full mt-2 p-2"
+
 >
+
 Send
+
 </button>
 
 </div>
@@ -50,3 +63,5 @@ Send
 )
 
 }
+
+export default Chatbot

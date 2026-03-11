@@ -1,45 +1,61 @@
+import {useState} from "react"
+import {loginUser} from "../api/api"
 
-import { useState } from "react"
-import { useNavigate } from "react-router-dom"
-import {loginUser} from "../services/api"
+function Login(){
 
-export default function Login(){
+const [username,setUsername] = useState("")
+const [password,setPassword] = useState("")
 
-  const nav = useNavigate()
-  const [username,setUsername]=useState("")
-  const [password,setPassword]=useState("")
+const login = async()=>{
 
-  const login = async ()=>{
+const res = await loginUser({username,password})
 
-    const res = await loginUser({username,password})
+localStorage.setItem("token",res.data.access)
 
-    localStorage.setItem("token",res.data.access)
+window.location="/dashboard"
 
-    nav("/dashboard")
-  }
-
-  return(
-    <div className="flex items-center justify-center h-screen bg-gray-100">
-
-      <div className="bg-white p-8 shadow w-80">
-        <h2 className="text-xl mb-4">Login</h2>
-
-        <input placeholder="username"
-          className="border p-2 w-full mb-2"
-          onChange={e=>setUsername(e.target.value)}
-        />
-
-        <input placeholder="password"
-          type="password"
-          className="border p-2 w-full mb-4"
-          onChange={e=>setPassword(e.target.value)}
-        />
-
-        <button onClick={login} className="bg-blue-500 text-white w-full p-2">
-          Login
-        </button>
-      </div>
-
-    </div>
-  )
 }
+
+return(
+
+<div className="flex justify-center items-center h-screen">
+
+<div className="bg-white shadow p-6">
+
+<h2 className="text-xl mb-4">
+
+Login
+
+</h2>
+
+<input
+placeholder="Username"
+onChange={(e)=>setUsername(e.target.value)}
+className="border p-2 mb-2"
+/>
+
+<input
+placeholder="Password"
+type="password"
+onChange={(e)=>setPassword(e.target.value)}
+className="border p-2 mb-2"
+/>
+
+<button
+onClick={login}
+className="bg-blue-600 text-white p-2 w-full"
+>
+
+Login
+
+</button>
+
+</div>
+
+</div>
+
+)
+
+}
+
+export default Login

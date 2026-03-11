@@ -1,4 +1,4 @@
-import Layout from "../components/Layout"
+import Layout from "../layouts/MainLayout"
 
 export default function Agreements(){
 

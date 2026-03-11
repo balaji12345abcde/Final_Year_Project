@@ -1,29 +1,24 @@
-import Layout from "../components/Layout"
+import Chatbot from "../components/Chatbot"
+import MainLayout from "../layouts/MainLayout"
 
-export default function LegalChat(){
+function LegalChat(){
 
 return(
 
-<Layout>
+<MainLayout>
 
-<h2 className="text-2xl font-semibold mb-6">
-Legal AI Assistant
+<h2 className="text-2xl mb-4">
+
+Legal Assistant
+
 </h2>
 
-<div className="bg-white shadow rounded p-6">
+<Chatbot/>
 
-<input
-className="border w-full p-3 mb-4"
-placeholder="Ask any legal question..."
-/>
-
-<button className="bg-blue-600 text-white px-6 py-2 rounded">
-Ask AI
-</button>
-
-</div>
-
-</Layout>
+</MainLayout>
 
 )
+
 }
+
+export default LegalChat

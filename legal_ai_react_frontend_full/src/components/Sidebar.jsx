@@ -1,48 +1,50 @@
 import {Link} from "react-router-dom"
 
-export default function Sidebar(){
+function Sidebar(){
 
 return(
 
-<div className="w-64 bg-slate-900 text-white flex flex-col">
+<div className="w-64 bg-gray-900 text-white min-h-screen p-5">
 
-<div className="p-6 text-2xl font-bold border-b border-slate-700">
-LegalAI
-</div>
+<h2 className="text-2xl font-bold mb-6">
 
-<nav className="flex-1 p-4 space-y-3">
+Legal AI
 
-<Link to="/dashboard" className="block hover:bg-slate-800 p-3 rounded">
-Dashboard
-</Link>
+</h2>
 
-<Link to="/upload" className="block hover:bg-slate-800 p-3 rounded">
-Upload Document
-</Link>
+<nav className="space-y-3">
 
-<Link to="/contracts" className="block hover:bg-slate-800 p-3 rounded">
-Contracts
-</Link>
+<Link to="/dashboard">Dashboard</Link>
 
-<Link to="/agreements" className="block hover:bg-slate-800 p-3 rounded">
-Agreements
-</Link>
+<br/>
 
-<Link to="/complaints" className="block hover:bg-slate-800 p-3 rounded">
-Crime Complaints
-</Link>
+<Link to="/upload">Upload Document</Link>
 
-<Link to="/history" className="block hover:bg-slate-800 p-3 rounded">
-Analysis History
-</Link>
+<br/>
 
-<Link to="/legal-chat" className="block hover:bg-slate-800 p-3 rounded">
-Legal Chatbot
-</Link>
+<Link to="/contracts">Contracts</Link>
+
+<br/>
+
+<Link to="/agreements">Agreements</Link>
+
+<br/>
+
+<Link to="/analysis">Analysis</Link>
+
+<br/>
+
+<Link to="/legal-chat">Legal Chatbot</Link>
+
+<br/>
+<Link to="/viewer">Document Viewer</Link>
 
 </nav>
 
 </div>
 
 )
+
 }
+
+export default Sidebar

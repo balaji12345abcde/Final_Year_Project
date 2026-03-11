@@ -1,32 +1,34 @@
-import Layout from "../components/Layout"
-import { uploadDocument } from "../services/api"
+import {uploadDocument} from "../api/api"
+import MainLayout from "../layouts/MainLayout"
 
-const upload=async (e)=>{
-    const file=e.target.files[0] 
+function Upload(){
+
+const upload = async(e)=>{
+
+const file = e.target.files[0]
+
 await uploadDocument(file)
+
+alert("Uploaded")
+
 }
-export default function Upload(){
+
 return(
 
-<Layout>
+<MainLayout>
 
-<h2 className="text-2xl font-semibold mb-6">
-Upload Legal Document
+<h2 className="text-2xl mb-4">
+
+Upload Document
+
 </h2>
 
-<div className="bg-white shadow rounded p-10 text-center">
+<input type="file" onChange={upload}/>
 
-<input type="file" className="mb-4"/>
-
-<br/>
-
-<button className="bg-blue-600 text-white px-6 py-2 rounded">
-Upload & Analyze
-</button>
-
-</div>
-
-</Layout>
+</MainLayout>
 
 )
+
 }
+
+export default Upload
