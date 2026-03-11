@@ -1,6 +1,8 @@
 from django.urls import path
 from .views import AnalyzeDocumentView
 
-urlpatterns=[
-    path('analyze/',AnalyzeDocumentView.as_view()),
+urlpatterns = [
+
+    path("analyze/",AnalyzeDocumentView.as_view())
+
 ]

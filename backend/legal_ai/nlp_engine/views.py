@@ -1,50 +1,58 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-from documents.models import Document
-from .matching_service import hybrid_match
-from .summarizer import generate_summary
-from .risk_analyzer import detect_risk
-from .explainable_ai import explain_match
-from .models import AnalysisResult
-from .chatbot_engine import chatbot_response
-class AnalyzeDocumentView(APIView):
-    permission_classes=[]
 
-    def post(self,request):
-        document_id=request.data.get("document_id")
-        user_query=request.data.get("query","")
+from documents.models import Document
+
+from .summarizer import generate_summary
+from .ner_extractor import extract_entities
+from .risk_analyzer import detect_risk
+from .classifier import classify_document
+from .matching_service import hybrid_match
+from .document_chatbot import document_chatbot
+
+
+class AnalyzeDocumentView(APIView):
+
+    def post(self, request):
+
+        document_id = request.data.get("document_id")
+        query = request.data.get("query", "")
+
         try:
-            document=Document.objects.get(id=document_id)
+            doc = Document.objects.get(id=document_id)
         except Document.DoesNotExist:
-            return Response({"error":"Document not found"},status=404)
-        result=hybrid_match(document.extracted_text)
-        summary=generate_summary(document.extracted_text)
-        risk_level=detect_risk(document.extracted_text)
-        explanation=explain_match(document.extracted_text,result["description"])
-        chat_reply=""
-        if user_query:
-            chat_reply=chatbot_response(
-                document.extracted_text,
-                user_query
-            )
-        analysis=AnalysisResult.objects.create(
-            document=document,
-            summary=summary,
-            act_section=f"{result['act_name']}-{result['section_number']}",
-            confidence_score=result["confidence_score"],
-            risk_level=risk_level,
-            simplified_text=summary,
-            translated_text="")
-        if not result:
-            return Response({"error":"No Acts available"},status=400)
+            return Response({"error": "Document not found"})
+
+        # IMPORTANT: USE TEXT NOT FILE
+        text = doc.extracted_text
+
+        if not text:
+            return Response({
+                "error": "Document text not extracted"
+            })
+
+        document_type = classify_document(text)
+
+        entities = extract_entities(text)
+
+        summary = generate_summary(text)
+
+        risk = detect_risk(text)
+
+        act_result = hybrid_match(text)
+
+        chatbot_answer = ""
+
+        if query:
+            chatbot_answer = document_chatbot(text, query)
+
         return Response({
-            "act_name":result["act_name"],
-            "section_number":result["section_number"],
-            "confidence_score":result["confidence_score"],
-            "summary":summary,
-            "risk_level":risk_level,
-            "explanation":explanation,
-            "chatbot_response":chat_reply
+            "document_type": document_type,
+            "summary": summary,
+            "risk_level": risk,
+            "entities": entities,
+            "act_name": act_result["act_name"],
+            "section_number": act_result["section_number"],
+            "confidence_score": act_result["confidence_score"],
+            "chatbot_response": chatbot_answer
         })
-    

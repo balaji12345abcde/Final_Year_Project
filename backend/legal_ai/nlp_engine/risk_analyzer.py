@@ -1,21 +1,34 @@
-import re
+import spacy
 
-HIGH_RISK_KEYWORDS=[
-    "fraud","cheating","criminal","breach","rape","threat","intimidation"
+nlp = spacy.load("en_core_web_sm")
+
+high_risk_words = [
+"fraud","cheating","forgery","murder","crime","scam"
 ]
 
-MEDIUM_RISK_KEYWORDS=[
-    "dispute","delay","complaint","violation","neglience"
+medium_risk_words = [
+"penalty","breach","violation","dispute"
 ]
+
 
 def detect_risk(text):
-    text_lower=text.lower();
-    high_score=sum(1 for word in HIGH_RISK_KEYWORDS if word in text_lower)
-    medium_score=sum(1 for word in MEDIUM_RISK_KEYWORDS if word in text_lower)
 
-    if high_score>0:
+    doc = nlp(text.lower())
+
+    score = 0
+
+    for token in doc:
+
+        if token.text in high_risk_words:
+            score += 3
+
+        if token.text in medium_risk_words:
+            score += 1
+
+    if score >= 6:
         return "High Risk"
-    elif medium_score>0:
+
+    if score >= 3:
         return "Medium Risk"
-    else:
-        return "Low Risk"
+
+    return "Low Risk"

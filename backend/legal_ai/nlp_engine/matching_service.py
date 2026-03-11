@@ -1,44 +1,53 @@
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+
 from sentence_transformers import SentenceTransformer
+
+from .models import ActSection
+
 import numpy as np
-from .models import ActSection as Act
-model = SentenceTransformer("all-MiniLM-L6-v2")
 
-def hybrid_match(document_text):
-   # adjust import if needed
 
-    acts = Act.objects.all()
+bert_model = SentenceTransformer("all-MiniLM-L6-v2")
 
-    act_texts = [act.description for act in acts]
 
-    # ---------------- TF-IDF ----------------
+def hybrid_match(text):
+
+    acts = ActSection.objects.all()
+
+    descriptions = [a.description for a in acts]
+
+    # TFIDF
     vectorizer = TfidfVectorizer()
 
-    # Fit on both acts + document
-    tfidf_matrix = vectorizer.fit_transform(act_texts + [document_text])
+    tfidf_matrix = vectorizer.fit_transform(descriptions)
 
-    act_vectors = tfidf_matrix[:-1]
-    doc_vector = tfidf_matrix[-1]
+    query_tfidf = vectorizer.transform([text])
 
-    tfidf_scores = cosine_similarity(doc_vector, act_vectors)[0]
+    tfidf_scores = cosine_similarity(query_tfidf,tfidf_matrix)[0]
 
-    # ---------------- BERT ----------------
-    act_embeddings = model.encode(act_texts)
-    doc_embedding = model.encode([document_text])
+    # BERT
+    bert_embeddings = bert_model.encode(descriptions)
 
-    bert_scores = cosine_similarity(doc_embedding, act_embeddings)[0]
+    query_embedding = bert_model.encode([text])
 
-    # ---------------- HYBRID ----------------
-    final_scores = 0.5 * tfidf_scores + 0.5 * bert_scores
+    bert_scores = cosine_similarity(query_embedding,bert_embeddings)[0]
+
+    # Hybrid score
+    final_scores = (tfidf_scores + bert_scores) / 2
 
     best_index = int(np.argmax(final_scores))
 
     best_act = acts[best_index]
 
     return {
-        "act_name": best_act.act_name,
-        "section_number": best_act.section_number,
-        "description": best_act.description,
-        "confidence_score": float(final_scores[best_index])
+
+        "act_name":best_act.act_name,
+
+        "section_number":best_act.section_number,
+
+        "description":best_act.description,
+
+        "confidence_score":float(final_scores[best_index])
+
     }
