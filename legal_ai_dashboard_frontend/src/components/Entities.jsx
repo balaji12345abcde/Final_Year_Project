@@ -1,29 +1,33 @@
-export default function Entities({entities}){
+export default function Entities({ entities = [] }) {
 
- if(!entities) return null
+  const filtered = entities.filter(e =>
+    ["PERSON", "ORG", "LOCATION", "DATE"].includes(e.label)
+  )
 
- return(
+  return (
 
-  <div className="bg-white p-5 rounded-xl shadow-lg">
+    <div className="bg-white shadow rounded p-4 mt-6">
 
-   <h3 className="font-semibold mb-3">
-    Entities
-   </h3>
+      <h3 className="font-semibold mb-3">
+        Named Entities
+      </h3>
 
-   <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2">
 
-    {entities.slice(0,10).map((e,i)=>(
-      <span
-       key={i}
-       className="bg-gray-200 px-3 py-1 rounded-lg text-sm"
-      >
-        {e.text || e}
-      </span>
-    ))}
+        {filtered.map((e, i) => (
 
-   </div>
+          <span
+            key={i}
+            className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded text-sm"
+          >
+            {e.text} ({e.label})
+          </span>
 
-  </div>
+        ))}
 
- )
+      </div>
+
+    </div>
+
+  )
 }

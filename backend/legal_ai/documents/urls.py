@@ -3,6 +3,6 @@ from .views import UploadDocumentView
 
 urlpatterns = [
 
-    path("upload/",UploadDocumentView.as_view())
+    path("upload/",UploadDocumentView.as_view(),name="upload_document")
 
 ]

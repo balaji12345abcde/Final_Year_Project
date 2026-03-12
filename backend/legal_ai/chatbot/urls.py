@@ -1,8 +1,9 @@
 from django.urls import path
-from .views import LegalChatView
+from .views import DocumentChatbot, GeneralChatbot
 
 urlpatterns = [
 
-    path("ask/",LegalChatView.as_view())
+    path("document/", DocumentChatbot.as_view()),
+    path("general/", GeneralChatbot.as_view()),
 
 ]

@@ -4,55 +4,42 @@ from rest_framework.response import Response
 from documents.models import Document
 
 from .summarizer import generate_summary
-from .ner_extractor import extract_entities
-from .risk_analyzer import detect_risk
-from .classifier import classify_document
-from .matching_service import hybrid_match
-from .document_chatbot import document_chatbot
+from .ner import extract_entities
+from .risk_analyzer import calculate_risk
+from .act_section_detector import detect_acts_sections
+from .document_classifier import classify_document
 
 
 class AnalyzeDocumentView(APIView):
 
     def post(self, request):
 
-        document_id = request.data.get("document_id")
-        query = request.data.get("query", "")
+        doc_id = request.data.get("document_id")
 
-        try:
-            doc = Document.objects.get(id=document_id)
-        except Document.DoesNotExist:
-            return Response({"error": "Document not found"})
+        doc = Document.objects.get(id=doc_id)
 
-        # IMPORTANT: USE TEXT NOT FILE
         text = doc.extracted_text
-
-        if not text:
-            return Response({
-                "error": "Document text not extracted"
-            })
-
-        document_type = classify_document(text)
-
-        entities = extract_entities(text)
 
         summary = generate_summary(text)
 
-        risk = detect_risk(text)
+        entities = extract_entities(text)
 
-        act_result = hybrid_match(text)
+        acts = detect_acts_sections(text)
 
-        chatbot_answer = ""
+        risk = calculate_risk(text)
 
-        if query:
-            chatbot_answer = document_chatbot(text, query)
+        doc_type = classify_document(text)
 
         return Response({
-            "document_type": document_type,
+
+            "document_type": doc_type,
+
             "summary": summary,
-            "risk_level": risk,
+
             "entities": entities,
-            "act_name": act_result["act_name"],
-            "section_number": act_result["section_number"],
-            "confidence_score": act_result["confidence_score"],
-            "chatbot_response": chatbot_answer
+
+            "acts": acts,
+
+            "risk_level": risk
+
         })

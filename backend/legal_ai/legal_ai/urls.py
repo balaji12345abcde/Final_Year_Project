@@ -2,15 +2,17 @@ from django.contrib import admin
 from django.urls import path,include
 from django.conf import settings
 from django.conf.urls.static import static
+from documents.views import UploadDocumentView
+from nlp_engine.views import AnalyzeDocumentView
+
 
 urlpatterns = [
 
-    path('admin/',admin.site.urls),
+path("api/documents/upload/", UploadDocumentView.as_view()),
 
-    path("api/users/",include("users.urls")),
-    path("api/documents/",include("documents.urls")),
-    path("api/nlp/",include("nlp_engine.urls")),
-    path("api/chatbot/",include("chatbot.urls"))
+path("api/nlp/analyze/", AnalyzeDocumentView.as_view()),
+
+path("api/chat/", include("chatbot.urls"))
 
 ]
 

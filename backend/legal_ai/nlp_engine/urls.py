@@ -3,6 +3,6 @@ from .views import AnalyzeDocumentView
 
 urlpatterns = [
 
-    path("analyze/",AnalyzeDocumentView.as_view())
+    path("analyze/",AnalyzeDocumentView.as_view(),name="analyze_document")
 
 ]
