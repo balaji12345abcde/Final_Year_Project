@@ -15,7 +15,7 @@ export default function Navbar(){
       className="rounded-full"
      />
 
-     <span>Balaji</span>
+     <span>User</span>
 
    </div>
 

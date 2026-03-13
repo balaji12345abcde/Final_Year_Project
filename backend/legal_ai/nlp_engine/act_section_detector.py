@@ -4,61 +4,69 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 import numpy as np
 
-bert = SentenceTransformer("all-MiniLM-L6-v2")
+from .act_data import ACT_DATABASE
+from .reason_extractor import extract_reason
 
 
-legal_sections = [
-
-"IPC Section 420 cheating fraud deception",
-"IPC Section 406 criminal breach of trust",
-"IPC Section 121 waging war against government",
-"IT Act Section 66 computer related offences",
-
-]
+# Load BERT model
+bert_model = SentenceTransformer('all-MiniLM-L6-v2')
 
 
 def detect_acts_sections(text):
 
-    # TF-IDF similarity
+    descriptions = [a["description"] for a in ACT_DATABASE]
 
+    # ---------- TF-IDF ----------
     vectorizer = TfidfVectorizer()
 
-    corpus = legal_sections + [text]
+    tfidf_matrix = vectorizer.fit_transform(
+        [text] + descriptions
+    )
 
-    tfidf = vectorizer.fit_transform(corpus)
-
-    scores = cosine_similarity(tfidf[-1], tfidf[:-1])[0]
-
-
-    # BERT similarity
-
-    bert_embeddings = bert.encode(corpus)
-
-    bert_scores = cosine_similarity(
-        [bert_embeddings[-1]],
-        bert_embeddings[:-1]
+    tfidf_scores = cosine_similarity(
+        tfidf_matrix[0:1], tfidf_matrix[1:]
     )[0]
 
 
-    # Hybrid score
+    # ---------- BERT ----------
+    doc_embedding = bert_model.encode(text)
 
-    hybrid = (scores + bert_scores) / 2
+    section_embeddings = bert_model.encode(descriptions)
+
+    bert_scores = cosine_similarity(
+        [doc_embedding],
+        section_embeddings
+    )[0]
 
 
-    top = np.argsort(hybrid)[-3:]
-
+    # ---------- Hybrid Score ----------
+    hybrid_scores = (tfidf_scores * 0.5) + (bert_scores * 0.5)
 
     results = []
 
-    for i in top:
+    for i, score in enumerate(hybrid_scores):
 
-        sec = legal_sections[i]
+        if score > 0.15:   # threshold
 
-        parts = sec.split()
+            act = ACT_DATABASE[i]
 
-        results.append({
-            "act": parts[0],
-            "section": parts[2]
-        })
+            reason = extract_reason(text, act["description"])
 
-    return results
+            results.append({
+
+                "act": act["act"],
+                "section": act["section"],
+                "description": act["description"],
+                "reason": reason,
+                "confidence": float(score)
+
+            })
+
+    # Sort by best match
+    results = sorted(
+        results,
+        key=lambda x: x["confidence"],
+        reverse=True
+    )
+
+    return results[:5]   

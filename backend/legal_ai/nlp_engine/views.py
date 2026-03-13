@@ -1,5 +1,6 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework import status
 
 from documents.models import Document
 
@@ -13,33 +14,69 @@ from .document_classifier import classify_document
 class AnalyzeDocumentView(APIView):
 
     def post(self, request):
-
         doc_id = request.data.get("document_id")
 
-        doc = Document.objects.get(id=doc_id)
+        if not doc_id:
+            return Response(
+                {"error": "document_id required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            doc = Document.objects.get(id=doc_id)
+        except Document.DoesNotExist:
+            return Response(
+                {"error": "Document not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
         text = doc.extracted_text
 
-        summary = generate_summary(text)
+        if not text:
+            return Response(
+                {"error": "Document text not extracted"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        entities = extract_entities(text)
+        try:
+            doc_type = classify_document(text)
 
-        acts = detect_acts_sections(text)
+            summary = generate_summary(text)
 
-        risk = calculate_risk(text)
+            entities = extract_entities(text)
+            acts = detect_acts_sections(text)
 
-        doc_type = classify_document(text)
+            # Extract section numbers
+            detected_sections = [
+                a.get("section") for a in acts
+            ]
+            risk_data = calculate_risk(
+                text=text,
+                detected_sections=detected_sections,
+                entities=entities
+            )
+            return Response({
 
-        return Response({
+                "document_type": doc_type,
 
-            "document_type": doc_type,
+                "summary": summary,
 
-            "summary": summary,
+                "entities": entities,
 
-            "entities": entities,
+                "acts": acts,
 
-            "acts": acts,
+                "risk_level": risk_data.get("risk_level"),
 
-            "risk_level": risk
+                "risk_score": risk_data.get("risk_score")
 
-        })
+            })
+
+        except Exception as e:
+
+            return Response(
+                {
+                    "error": "Analysis failed",
+                    "details": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

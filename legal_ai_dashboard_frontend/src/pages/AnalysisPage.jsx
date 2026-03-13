@@ -6,7 +6,6 @@ import Loader from "../components/Loader"
 import Entities from "../components/Entities"
 import RiskChart from "../components/RiskChart"
 import DocumentChatbot from "../components/DocumentChatbot"
-import GeneralChatbot from "../components/GeneralChatbot"
 
 import MainLayout from "../layout/MainLayout"
 
@@ -70,9 +69,7 @@ export default function AnalysisPage() {
             </h3>
 
             <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded">
-
               {data.document_type}
-
             </span>
 
           </div>
@@ -96,7 +93,7 @@ export default function AnalysisPage() {
 
             <div className="bg-white p-6 rounded shadow flex justify-center">
 
-              <RiskChart level={data.risk_level} />
+              <RiskChart riskScore={data.risk_score} />
 
             </div>
 
@@ -113,9 +110,20 @@ export default function AnalysisPage() {
 
             {data.acts && data.acts.map((a, i) => (
 
-              <p key={i}>
-                {a.act} - Section {a.section}
-              </p>
+              <div
+                key={i}
+                className="border rounded p-4 mb-3 bg-gray-50"
+              >
+
+                <p className="font-semibold">
+                  {a.act} - Section {a.section}
+                </p>
+
+                <p className="text-sm text-gray-600 mt-2">
+                  Reason: {a.reason}
+                </p>
+
+              </div>
 
             ))}
 
@@ -130,12 +138,12 @@ export default function AnalysisPage() {
 
       )}
 
-      {/* Chatbots */}
+      {/* Document Chatbot */}
 
       <DocumentChatbot docId={docId} />
-      <GeneralChatbot />
 
     </MainLayout>
 
   )
+
 }

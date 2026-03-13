@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom"
 
-export default function Sidebar(){
+export default function Sidebar({openChat}){
 
  return(
 
@@ -25,6 +25,13 @@ export default function Sidebar(){
     >
      Upload Document
     </Link>
+
+    <button
+     onClick={openChat}
+     className="block w-full text-left hover:bg-indigo-500 p-2 rounded"
+    >
+     Legal Chat Bot
+    </button>
 
    </nav>
 

@@ -1,9 +1,11 @@
 import { PieChart, Pie, Cell, Tooltip, Legend } from "recharts"
 
-export default function RiskChart({ level }) {
+export default function RiskChart({ riskScore }) {
 
-  // convert risk level to percentage
-  const riskPercent = level === "High Risk" ? 80 : level === "Medium Risk" ? 50 : 20
+  // Ensure valid number
+  const score = Number(riskScore) || 0
+
+  const riskPercent = Math.min(score * 10, 100)
 
   const data = [
     { name: "Risk", value: riskPercent },
@@ -16,7 +18,6 @@ export default function RiskChart({ level }) {
 
     <div className="flex flex-col items-center">
 
-      {/* Title */}
       <h3 className="text-lg font-semibold mb-4">
         Risk Assessment
       </h3>
@@ -29,9 +30,6 @@ export default function RiskChart({ level }) {
           cx="50%"
           cy="50%"
           outerRadius={90}
-          label={({ name, percent }) =>
-            `${name}: ${(percent * 100).toFixed(0)}%`
-          }
         >
 
           {data.map((entry, index) => (
@@ -45,7 +43,6 @@ export default function RiskChart({ level }) {
 
       </PieChart>
 
-      {/* Risk Score */}
       <div className="mt-4 text-center">
 
         <p className="text-gray-600 text-sm">
@@ -59,7 +56,5 @@ export default function RiskChart({ level }) {
       </div>
 
     </div>
-
   )
-
 }

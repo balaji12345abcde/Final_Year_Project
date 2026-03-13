@@ -6,20 +6,21 @@ def extract_entities(text):
 
     doc = nlp(text)
 
-    entities = []
+    unique_entities = set()
 
     for ent in doc.ents:
 
         if ent.label_ in ["PERSON","ORG","GPE","DATE"]:
 
-            label = ent.label_
+            unique_entities.add((ent.text, ent.label_))
 
-            if label == "GPE":
-                label = "LOCATION"
+    entities = []
 
-            entities.append({
-                "text": ent.text,
-                "label": label
-            })
+    for text,label in unique_entities:
+
+        entities.append({
+            "text": text,
+            "label": label
+        })
 
     return entities

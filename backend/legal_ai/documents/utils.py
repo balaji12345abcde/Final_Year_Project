@@ -6,8 +6,6 @@ def extract_pdf_text(file):
     try:
 
         text = ""
-
-        # FIX: open Django uploaded file correctly
         with pdfplumber.open(file) as pdf:
 
             for page in pdf.pages:
