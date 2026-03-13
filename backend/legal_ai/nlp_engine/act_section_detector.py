@@ -11,7 +11,6 @@ from .reason_extractor import extract_reason
 # Load BERT model
 bert_model = SentenceTransformer('all-MiniLM-L6-v2')
 
-
 def detect_acts_sections(text):
 
     descriptions = [a["description"] for a in ACT_DATABASE]
