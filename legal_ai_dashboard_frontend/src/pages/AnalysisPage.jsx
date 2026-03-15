@@ -9,16 +9,16 @@ import DocumentChatbot from "../components/DocumentChatbot"
 
 import MainLayout from "../layout/MainLayout"
 
-export default function AnalysisPage() {
+export default function AnalysisPage(){
 
-  const { docId } = useParams()
+ const { docId } = useParams()
 
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(false)
+ const [data,setData] = useState(null)
+ const [loading,setLoading] = useState(false)
 
-  const runAnalysis = async () => {
+ const runAnalysis = async ()=>{
 
-    try {
+   try{
 
       setLoading(true)
 
@@ -26,124 +26,130 @@ export default function AnalysisPage() {
 
       setData(res)
 
-    } catch (err) {
+   }catch(err){
 
       console.error(err)
       alert("Analysis failed")
 
-    } finally {
+   }finally{
 
       setLoading(false)
 
-    }
+   }
 
-  }
+ }
 
-  return (
+ return(
 
-    <MainLayout>
+  <MainLayout>
 
-      <h1 className="text-2xl font-bold mb-6">
-        Document Analysis
-      </h1>
+   <h1 className="text-2xl font-bold mb-6">
+    Document Analysis
+   </h1>
 
-      <button
-        onClick={runAnalysis}
-        className="bg-indigo-600 text-white px-4 py-2 rounded mb-6"
-      >
-        Analyze Document
-      </button>
+   <button
+     onClick={runAnalysis}
+     className="bg-indigo-600 text-white px-4 py-2 rounded mb-6"
+   >
+     Analyze Document
+   </button>
 
-      {loading && <Loader />}
+   {loading && <Loader/>}
 
-      {data && (
+   {data && (
 
-        <div className="space-y-6 overflow-y-auto max-h-[70vh] pr-3">
+    <div className="space-y-6 max-h-[75vh] overflow-y-auto">
 
-          {/* Document Type */}
+     {/* Document Type */}
 
-          <div className="bg-white p-6 rounded shadow">
+     <div className="bg-white p-6 rounded shadow">
 
-            <h3 className="font-semibold mb-2">
-              Document Type
-            </h3>
+       <h3 className="font-semibold mb-2">
+        Document Type
+       </h3>
 
-            <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded">
-              {data.document_type}
-            </span>
+       <span className="bg-indigo-100 px-3 py-1 rounded">
+         {data.document_type}
+       </span>
 
-          </div>
-
-
-          {/* Summary + Risk */}
-
-          <div className="grid grid-cols-2 gap-6">
-
-            <div className="bg-white p-6 rounded shadow">
-
-              <h3 className="font-semibold mb-2">
-                Summary
-              </h3>
-
-              <p className="text-gray-700">
-                {data.summary}
-              </p>
-
-            </div>
-
-            <div className="bg-white p-6 rounded shadow flex justify-center">
-
-              <RiskChart riskScore={data.risk_score} />
-
-            </div>
-
-          </div>
+     </div>
 
 
-          {/* Acts */}
+     {/* Structured Summary */}
 
-          <div className="bg-white p-6 rounded shadow">
+     <div className="bg-white p-6 rounded shadow">
 
-            <h3 className="font-semibold mb-3">
-              Acts and Sections
-            </h3>
+  <h3 className="font-semibold mb-4">
+    Document Summary
+  </h3>
 
-            {data.acts && data.acts.map((a, i) => (
+  {data.summary && Object.entries(data.summary).map(([title, text], i) => (
 
-              <div
-                key={i}
-                className="border rounded p-4 mb-3 bg-gray-50"
-              >
+    <div key={i} className="mb-5">
 
-                <p className="font-semibold">
-                  {a.act} - Section {a.section}
-                </p>
+      <h4 className="text-blue-600 font-semibold mb-2">
+        {title}
+      </h4>
 
-                <p className="text-sm text-gray-600 mt-2">
-                  Reason: {a.reason}
-                </p>
+      <p className="text-gray-700">
+        {text}
+      </p>
 
-              </div>
+    </div>
 
-            ))}
+  ))}
 
-          </div>
+</div>
 
 
-          {/* Entities */}
+     {/* Acts */}
 
-          <Entities entities={data.entities || []} />
+     <div className="bg-white p-6 rounded shadow">
 
-        </div>
+       <h3 className="font-semibold mb-3">
+        Acts and Sections
+       </h3>
 
-      )}
+       {data.acts.map((a,i)=>(
 
-      {/* Document Chatbot */}
+         <div
+           key={i}
+           className="border p-3 rounded mb-3"
+         >
 
-      <DocumentChatbot docId={docId} />
+           <p className="font-semibold">
+             {a.act} - Section {a.section}
+           </p>
 
-    </MainLayout>
+           <p className="text-sm text-gray-600">
+             Reason: {a.reason}
+           </p>
 
-  )
+         </div>
+
+       ))}
+
+     </div>
+
+
+     {/* Risk */}
+
+     <div className="bg-white p-6 rounded shadow">
+
+       <RiskChart riskScore={data.risk_score}/>
+
+     </div>
+
+     <Entities entities={data.entities}/>
+
+    </div>
+
+   )}
+
+   <DocumentChatbot docId={docId}/>
+
+  </MainLayout>
+
+ )
 
 }

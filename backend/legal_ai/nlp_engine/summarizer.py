@@ -1,66 +1,172 @@
-from transformers import pipeline
+import re
+import nltk
+from transformers import pipeline, AutoTokenizer
+from sentence_transformers import SentenceTransformer, util
 
+nltk.download("punkt")
+
+# BART summarizer
 summarizer = pipeline(
     "summarization",
     model="facebook/bart-large-cnn"
 )
 
+# tokenizer for safe chunking
+tokenizer = AutoTokenizer.from_pretrained("facebook/bart-large-cnn")
 
-def chunk_text(text, chunk_size=600):
+# BERT semantic model
+bert_model = SentenceTransformer("all-MiniLM-L6-v2")
 
-    words = text.split()
+
+# --------------------------------
+# Known legal headings
+# --------------------------------
+
+LEGAL_HEADINGS = [
+    "FACTS",
+    "BACKGROUND",
+    "INTRODUCTION",
+    "ARGUMENTS",
+    "ANALYSIS",
+    "JUDGMENT",
+    "DECISION",
+    "ORDER",
+    "PARTIES",
+    "PAYMENT TERMS",
+    "CONFIDENTIALITY",
+    "TERMINATION",
+    "SCOPE OF WORK"
+]
+
+
+# --------------------------------
+# Detect headings using BERT
+# --------------------------------
+
+def detect_headings_with_bert(text):
+
+    lines = text.split("\n")
+
+    sections = {}
+
+    current_heading = "INTRODUCTION"
+
+    sections[current_heading] = ""
+
+    heading_embeddings = bert_model.encode(LEGAL_HEADINGS)
+
+    for line in lines:
+
+        line = line.strip()
+
+        if len(line) < 4:
+            continue
+
+        # encode line
+        line_embedding = bert_model.encode(line)
+
+        similarity = util.cos_sim(line_embedding, heading_embeddings)
+
+        max_score = similarity.max().item()
+
+        if max_score > 0.65:
+
+            current_heading = line
+
+            sections[current_heading] = ""
+
+        else:
+
+            sections[current_heading] += " " + line
+
+    return sections
+
+
+# --------------------------------
+# Token safe chunking
+# --------------------------------
+
+def chunk_text(text, max_tokens=800):
+
+    tokens = tokenizer.encode(text)
+
     chunks = []
 
-    for i in range(0, len(words), chunk_size):
-        chunk = " ".join(words[i:i + chunk_size])
+    for i in range(0, len(tokens), max_tokens):
+
+        chunk_tokens = tokens[i:i+max_tokens]
+
+        chunk = tokenizer.decode(chunk_tokens)
+
         chunks.append(chunk)
 
     return chunks
 
 
-def generate_summary(text):
+# --------------------------------
+# Summarize chunk
+# --------------------------------
+
+def summarize_chunk(chunk):
 
     try:
 
-        if not text:
-            return "No text found"
+        result = summarizer(
+            chunk,
+            max_length=100,
+            min_length=25,
+            do_sample=False
+        )
 
-        # Remove extra spaces
-        text = " ".join(text.split())
-
-        # limit extremely large documents
-        text = text[:15000]
-
-        chunks = chunk_text(text)
-
-        summaries = []
-
-        for chunk in chunks[:5]:   # limit chunks to prevent overload
-
-            if len(chunk.split()) < 40:
-                continue
-
-            # truncate chunk safely
-            chunk = chunk[:3000]
-
-            result = summarizer(
-                chunk,
-                max_length=130,
-                min_length=40,
-                do_sample=False
-            )
-
-            summaries.append(result[0]["summary_text"])
-
-        if not summaries:
-            return "Unable to generate summary"
-
-        final_summary = " ".join(summaries)
-
-        return final_summary
+        return result[0]["summary_text"]
 
     except Exception as e:
 
-        print("Summarization Error:", e)
+        print("Chunk error:", e)
 
-        return "Summary temporarily unavailable for this document."
+        return ""
+
+
+# --------------------------------
+# Summarize section
+# --------------------------------
+
+def summarize_section(text):
+
+    chunks = chunk_text(text)
+
+    summaries = []
+
+    for chunk in chunks:
+
+        if len(chunk.split()) < 40:
+            continue
+
+        summary = summarize_chunk(chunk)
+
+        if summary:
+            summaries.append(summary)
+
+    return " ".join(summaries)
+
+
+# --------------------------------
+# Main structured summarization
+# --------------------------------
+
+def generate_structured_summary(text):
+
+    sections = detect_headings_with_bert(text)
+
+    summaries = {}
+
+    for heading, content in sections.items():
+
+        content = content.strip()
+
+        if len(content.split()) < 80:
+            continue
+
+        summaries[heading] = summarize_section(content)
+
+    return summaries
