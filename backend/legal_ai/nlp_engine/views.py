@@ -1,6 +1,5 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-
 from documents.models import Document
 
 from .summarizer import generate_structured_summary
@@ -21,29 +20,24 @@ class AnalyzeDocumentView(APIView):
         text = doc.extracted_text
 
         document_type = classify_document(text)
-
         summary = generate_structured_summary(text)
-
         entities = extract_entities(text)
-
         acts = detect_acts_sections(text)
 
         sections = [a["section"] for a in acts]
 
         risk = calculate_risk(text, sections)
 
+        # ✅ SAVE TO DB
+        doc.doc_type = document_type
+        doc.risk_level = risk["risk_level"]
+        doc.save()
+
         return Response({
-
             "document_type": document_type,
-
             "summary": summary,
-
             "entities": entities,
-
             "acts": acts,
-
             "risk_level": risk["risk_level"],
-
             "risk_score": risk["risk_score"]
-
         })

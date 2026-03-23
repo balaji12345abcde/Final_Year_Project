@@ -1,13 +1,12 @@
-export default function Loader(){
+export default function Loader() {
 
- return(
+  return (
 
-  <div className="flex justify-center items-center h-40">
+    <div className="flex justify-center items-center h-40">
 
-   <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-500"></div>
+      <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-indigo-600"></div>
 
-  </div>
+    </div>
 
- )
-
+  );
 }

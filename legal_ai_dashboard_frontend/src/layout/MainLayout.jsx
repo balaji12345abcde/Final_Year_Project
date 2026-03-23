@@ -1,36 +1,36 @@
-import { useState } from "react"
-import Sidebar from "../components/Sidebar"
-import Navbar from "../components/Navbar"
-import GeneralChatbot from "../components/GeneralChatbot"
+import Sidebar from "../components/Sidebar";
+import Navbar from "../components/Navbar";
 
-export default function MainLayout({children}){
+export default function MainLayout({ children }) {
 
- const [showChat,setShowChat] = useState(false)
+  return (
 
- return(
+    <div className="flex h-screen overflow-hidden">
 
-  <div className="flex">
+      {/* SIDEBAR */}
+      <Sidebar />
 
-   <Sidebar openChat={()=>setShowChat(true)}/>
+      {/* RIGHT SIDE */}
+      <div className="flex-1 flex flex-col">
 
-   <div className="flex-1">
+        {/* NAVBAR */}
+        <Navbar />
 
-    <Navbar/>
+        {/* 🌈 MAIN BACKGROUND */}
+        <div className="flex-1 bg-main p-4 overflow-y-auto">
 
-    <div className="p-8 bg-gray-100 min-h-screen">
+          {/* 💎 GLASS WRAPPER */}
+          <div className="glass p-6 min-h-full">
 
-     {children}
+            {children}
+
+          </div>
+
+        </div>
+
+      </div>
 
     </div>
 
-   </div>
-
-   {showChat && (
-     <GeneralChatbot closeChat={()=>setShowChat(false)}/>
-   )}
-
-  </div>
-
- )
-
+  );
 }

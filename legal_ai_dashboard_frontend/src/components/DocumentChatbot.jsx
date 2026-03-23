@@ -1,97 +1,150 @@
-import { useState } from "react"
-import { askDocumentBot } from "../api/api"
+import { useState, useRef, useEffect } from "react";
+import { motion } from "framer-motion";
+import { askDocumentBot } from "../api/api";
+import Loader from "../components/Loader";
 
-export default function DocumentChatbot({ docId }){
+export default function DocumentChatbot({ docId, close }) {
 
- const [open,setOpen] = useState(false)
- const [question,setQuestion] = useState("")
- const [answer,setAnswer] = useState("")
- const [loading,setLoading] = useState(false)
+  const [question, setQuestion] = useState("");
+  const [chat, setChat] = useState([]);
+  const [loading, setLoading] = useState(false);
 
- const ask = async()=>{
+  const chatEndRef = useRef(null);
 
-  if(!question) return
+  // 🔽 Auto scroll
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chat, loading]);
 
-  try{
+  const ask = async () => {
 
-   setLoading(true)
+    if (!question.trim()) return;
 
-   const res = await askDocumentBot(docId,question)
+    const userMsg = { type: "q", text: question };
 
-   setAnswer(res.answer)
+    // ✅ Add user message immediately
+    setChat((prev) => [...prev, userMsg]);
 
-  }catch(err){
+    try {
 
-   console.error(err)
-   setAnswer("Error getting response")
+      setLoading(true);
 
-  }finally{
+      const currentQuestion = question;
+      setQuestion("");
 
-   setLoading(false)
+      const res = await askDocumentBot(docId, currentQuestion);
 
-  }
+      const botMsg = {
+        type: "a",
+        text: res.answer || "No answer found"
+      };
 
- }
+      setChat((prev) => [...prev, botMsg]);
 
- return(
+    } catch (err) {
 
-  <div>
+      console.error(err);
 
-   <button
-    onClick={()=>setOpen(!open)}
-    className="fixed bottom-6 right-6 bg-blue-600 text-white px-4 py-3 rounded-full shadow-lg z-50"
-   >
-    💬
-   </button>
+      setChat((prev) => [
+        ...prev,
+        { type: "a", text: "⚠️ Error getting response" }
+      ]);
 
-   <div
-    className={`fixed top-0 right-0 h-full w-80 bg-white shadow-xl transform transition-transform duration-300 z-50
-    ${open ? "translate-x-0" : "translate-x-full"}`}
-   >
+    } finally {
 
-    <div className="p-4 border-b flex justify-between">
+      setLoading(false);
 
-     <h3 className="font-semibold text-lg">
-      Document Assistant
-     </h3>
+    }
+  };
 
-     <button onClick={()=>setOpen(false)}>
-      X
-     </button>
+  return (
 
-    </div>
+    <motion.div
+      initial={{ x: 350 }}
+      animate={{ x: 0 }}
+      className="fixed right-0 top-0 h-full w-96 z-50 flex flex-col shadow-2xl"
+      style={{
+        background: "linear-gradient(135deg, #4f46e5, #9333ea, #ec4899)"
+      }}
+    >
 
-    <div className="p-4">
+      {/* 🌫 Glass Container */}
+      <div className="glass flex flex-col h-full p-4 text-white">
 
-     <input
-      value={question}
-      onChange={(e)=>setQuestion(e.target.value)}
-      placeholder="Ask about this document..."
-      className="border p-2 w-full rounded"
-     />
+        {/* Header */}
+        <div className="flex justify-between items-center mb-4">
 
-     <button
-      onClick={ask}
-      className="bg-blue-600 text-white px-4 py-2 rounded mt-3 w-full"
-     >
-      Ask
-     </button>
+          <h3 className="font-semibold text-lg">
+            📄 Doc Assistant
+          </h3>
 
-     {loading && (
-      <p className="mt-3 text-gray-500">
-       Thinking...
-      </p>
-     )}
+          <button
+            onClick={close}
+            className="hover:bg-white/20 px-2 py-1 rounded"
+          >
+            ✕
+          </button>
 
-     <div className="mt-4 text-gray-700 max-h-64 overflow-y-auto">
-      {answer}
-     </div>
+        </div>
 
-    </div>
+        {/* Chat Messages */}
+        <div className="flex-1 overflow-y-auto space-y-3 mb-3 pr-1">
 
-   </div>
+          {chat.length === 0 && (
+            <p className="text-sm opacity-70">
+              Ask questions about your document...
+            </p>
+          )}
 
-  </div>
+          {chat.map((msg, i) => (
 
- )
+            <div
+              key={i}
+              className={`p-3 rounded-xl max-w-[80%] text-sm ${
+                msg.type === "q"
+                  ? "bg-white/20 ml-auto backdrop-blur"
+                  : "bg-white/30 text-white"
+              }`}
+            >
+              {msg.text}
+            </div>
+
+          ))}
+
+          {/* 🔄 Loader */}
+          {loading && (
+            <div className="bg-white/30 p-3 rounded-xl w-fit">
+              <Loader />
+            </div>
+          )}
+
+          <div ref={chatEndRef}></div>
+
+        </div>
+
+        {/* Input */}
+        <div className="flex gap-2">
+
+          <input
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && ask()}
+            className="flex-1 p-2 rounded bg-white/20 text-white placeholder-white/70 outline-none"
+            placeholder="Ask about document..."
+          />
+
+          <button
+            onClick={ask}
+            disabled={loading}
+            className="bg-white text-indigo-600 px-4 rounded font-semibold hover:scale-105 transition"
+          >
+            Send
+          </button>
+
+        </div>
+
+      </div>
+
+    </motion.div>
+  );
 }

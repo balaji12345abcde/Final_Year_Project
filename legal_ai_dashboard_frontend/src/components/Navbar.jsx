@@ -1,26 +1,52 @@
-export default function Navbar(){
+import { useNavigate } from "react-router-dom";
 
- return(
+export default function Navbar() {
 
-  <div className="flex justify-between items-center bg-white shadow px-6 py-3">
+  const navigate = useNavigate();
+  const user = localStorage.getItem("user") || "User";
 
-   <h2 className="text-lg font-semibold">
-    Legal AI Document Analyzer
-   </h2>
+  const logout = () => {
+    localStorage.clear();
+    navigate("/");
+  };
 
-   <div className="flex items-center gap-3">
+  return (
 
-     <img
-      src="https://i.pravatar.cc/40"
-      className="rounded-full"
-     />
+    <div className="px-3 bg-blue-600 py-3 glass flex justify-between items-center text-white">
 
-     <span>User</span>
+      {/* LEFT TITLE */}
+      <h2 className="font-semibold text-lg tracking-wide">
+        ⚖ SMART LEGAL AI
+      </h2>
 
-   </div>
+      {/* RIGHT SECTION */}
+      <div className="flex items-center gap-4">
 
-  </div>
+        {/* Avatar */}
+        <div className="w-10 h-10 rounded-full overflow-hidden border border-white/30">
+          <img
+            src="https://i.pravatar.cc/100"
+            alt="user"
+            className="w-full h-full object-cover"
+          />
+        </div>
 
- )
+        {/* Username */}
+        <span className="text-white/90 font-medium">
+          {user}
+        </span>
 
+        {/* Logout Button */}
+        <button
+          onClick={logout}
+          className="bg-red-500/80 hover:bg-red-600 px-4 py-1 rounded-lg text-sm transition-all duration-200 shadow-md"
+        >
+          Logout
+        </button>
+
+      </div>
+
+    </div>
+
+  );
 }
