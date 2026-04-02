@@ -30,9 +30,9 @@ Answer clearly in india act and section and legal based:
 
         result = legal_generator(
             prompt,
-            max_length=200,
+            max_length=50,
             do_sample=False,
-            temperature=0.2
+            temperature=0.7
         )
 
         answer = result[0]["generated_text"]

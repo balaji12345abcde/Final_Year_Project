@@ -1,6 +1,9 @@
+import { useEffect, useState } from "react";
 import MainLayout from "../layout/MainLayout";
 import { motion } from "framer-motion";
 import { useAnalysis } from "../context/AnalysisContext";
+import { analyzeDocument } from "../api/api";
+
 import {
   PieChart,
   Pie,
@@ -11,9 +14,47 @@ import {
 
 export default function RiskPage() {
 
-  const { analysisData } = useAnalysis();
+  const {
+    analysisData,
+    setAnalysisData,
+    docId,
+    loadDocument
+  } = useAnalysis();
 
-  const risk = Math.min((analysisData?.risk_score || 0) * 10, 100);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+
+    // 🔥 Load correct document into context
+    if (!docId) {
+      const savedDoc = localStorage.getItem("docId");
+      if (savedDoc) {
+        loadDocument(savedDoc);
+      }
+      return;
+    }
+
+    // ✅ If already exists → don't fetch again
+    if (analysisData) return;
+
+    setLoading(true);
+
+    analyzeDocument(docId)
+      .then((res) => {
+        setAnalysisData(res);
+      })
+      .catch((err) => {
+        console.error("Risk fetch error:", err);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+
+  }, [docId]);
+
+  // 🔥 Safe fallback
+  const riskScore = analysisData?.risk_score || 0;
+  const risk = Math.min(riskScore * 10, 100);
 
   const chartData = [
     { name: "Risk", value: risk },
@@ -36,7 +77,13 @@ export default function RiskPage() {
           Risk Analysis
         </h1>
 
-        {analysisData ? (
+        {/* 🔄 Loading */}
+        {loading && (
+          <p className="text-gray-500">Loading risk analysis...</p>
+        )}
+
+        {/* ✅ DATA */}
+        {!loading && analysisData && (
 
           <>
             {/* ================== TOP CARD ================== */}
@@ -54,14 +101,13 @@ export default function RiskPage() {
                 {risk > 70
                   ? "High Risk Document ⚠️"
                   : risk > 40
-                  ? "Moderate Risk ⚡"
-                  : "Low Risk ✅"}
+                    ? "Moderate Risk ⚡"
+                    : "Low Risk ✅"}
               </p>
 
             </div>
 
-
-            {/* ================== CHART CARD ================== */}
+            {/* ================== CHART ================== */}
             <div className="bg-white p-6 rounded-xl shadow flex justify-center">
 
               <div className="w-[320px] h-[320px] relative">
@@ -72,15 +118,12 @@ export default function RiskPage() {
                     <Pie
                       data={chartData}
                       dataKey="value"
-                      innerRadius={70}   // 🔥 donut style
+                      innerRadius={70}
                       outerRadius={100}
                       paddingAngle={3}
                     >
                       {chartData.map((entry, index) => (
-                        <Cell
-                          key={index}
-                          fill={COLORS[index]}
-                        />
+                        <Cell key={index} fill={COLORS[index]} />
                       ))}
                     </Pie>
 
@@ -107,11 +150,13 @@ export default function RiskPage() {
             </div>
 
           </>
+        )}
 
-        ) : (
+        {/* ❌ No Data */}
+        {!loading && !analysisData && (
 
           <p className="text-gray-500">
-            No data available. Please analyze document first.
+            No data available. Upload and analyze a document first.
           </p>
 
         )}

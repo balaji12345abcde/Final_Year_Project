@@ -10,7 +10,8 @@ export default function UploadPage() {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const { setAnalysisData } = useAnalysis();
+  // 🔥 USE NEW CONTEXT METHODS
+  const { loadDocument, clearAnalysis } = useAnalysis();
 
   const navigate = useNavigate();
 
@@ -26,14 +27,21 @@ export default function UploadPage() {
       setLoading(true);
 
       const res = await uploadDocument(file);
-
       const docId = res.document_id;
 
+      // =====================================
       // 🔥 CLEAR OLD DATA
-      setAnalysisData(null);
+      // =====================================
+      clearAnalysis();
 
-      localStorage.setItem("docId", docId);
+      // =====================================
+      // 🔥 LOAD NEW DOCUMENT (IMPORTANT)
+      // =====================================
+      loadDocument(docId);
 
+      // =====================================
+      // 🔥 NAVIGATE
+      // =====================================
       navigate(`/summary/${docId}`);
 
     } catch (err) {

@@ -13,7 +13,7 @@ def extract_pdf_text(file):
 
                 if page_text:
                     text += page_text + "\n"
-
+        print("Raw Text : "+text)
         return text
 
     except Exception as e:

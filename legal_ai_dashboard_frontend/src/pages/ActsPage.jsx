@@ -1,10 +1,48 @@
+import { useEffect, useState } from "react";
 import MainLayout from "../layout/MainLayout";
 import { motion } from "framer-motion";
 import { useAnalysis } from "../context/AnalysisContext";
+import { analyzeDocument } from "../api/api";
 
 export default function ActsPage() {
 
-  const { analysisData } = useAnalysis();
+  const {
+    analysisData,
+    setAnalysisData,
+    docId,
+    loadDocument
+  } = useAnalysis();
+
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+
+    // 🔥 Load document into context (important for refresh)
+    if (!docId) {
+      const savedDoc = localStorage.getItem("docId");
+      if (savedDoc) {
+        loadDocument(savedDoc);
+      }
+      return;
+    }
+
+    // ✅ If already exists → skip API call
+    if (analysisData) return;
+
+    setLoading(true);
+
+    analyzeDocument(docId)
+      .then((res) => {
+        setAnalysisData(res);
+      })
+      .catch((err) => {
+        console.error("Acts fetch error:", err);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+
+  }, [docId]);
 
   const acts = analysisData?.acts || [];
 
@@ -12,7 +50,6 @@ export default function ActsPage() {
 
     <MainLayout>
 
-      {/* 🌈 Gradient Background */}
       <div className="bg-main min-h-screen p-6 text-white">
 
         <motion.div
@@ -25,8 +62,13 @@ export default function ActsPage() {
             Acts & Sections
           </h1>
 
-          {/* ✅ Acts List */}
-          {acts.length > 0 ? (
+          {/* 🔄 Loading */}
+          {loading && (
+            <p className="opacity-80">Loading acts...</p>
+          )}
+
+          {/* ✅ Acts */}
+          {!loading && acts.length > 0 && (
 
             <div className="space-y-4">
 
@@ -40,15 +82,25 @@ export default function ActsPage() {
                   className="glass p-5 shadow-lg hover:scale-[1.02] transition"
                 >
 
-                  {/* Act Title */}
                   <h3 className="font-semibold text-lg">
                     {a.act} - Section {a.section}
                   </h3>
 
-                  {/* Reason */}
+                  {a.description && (
+                    <p className="mt-2 text-sm">
+                      {a.description}
+                    </p>
+                  )}
+
                   {a.reason && (
-                    <p className="mt-2 text-sm opacity-80">
-                      {a.reason}
+                    <p className="mt-2 text-xs opacity-90">
+                      Reason: {a.reason}
+                    </p>
+                  )}
+
+                  {a.confidence && (
+                    <p className="mt-1 text-xs text-white-700 font-semibold">
+                      Confidence: {(a.confidence * 100).toFixed(2)}%
                     </p>
                   )}
 
@@ -58,10 +110,13 @@ export default function ActsPage() {
 
             </div>
 
-          ) : (
+          )}
+
+          {/* ❌ No Data */}
+          {!loading && acts.length === 0 && (
 
             <div className="glass p-6 text-center opacity-80">
-              No data available. Please analyze document first.
+              No acts detected. Upload and analyze a document first.
             </div>
 
           )}

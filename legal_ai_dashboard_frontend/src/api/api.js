@@ -12,7 +12,6 @@ const API = axios.create({
 // ==========================
 API.interceptors.request.use(
   (config) => {
-
     const token = localStorage.getItem("token");
 
     if (token) {
@@ -74,6 +73,37 @@ export const analyzeDocument = async (documentId) => {
 
 
 // ==========================
+// ⚡ STREAM SUMMARY (FIXED 🔥)
+// ==========================
+export const streamSummary = (docId, onData) => {
+
+  const url = `http://127.0.0.1:8000/api/nlp/stream-summary/${docId}/`;
+
+  const eventSource = new EventSource(url);
+
+  eventSource.onmessage = (event) => {
+
+    // ✅ END SIGNAL
+    if (event.data === "[DONE]") {
+      eventSource.close();
+      return;
+    }
+
+    if (event.data) {
+      onData(event.data);
+    }
+  };
+
+  eventSource.onerror = () => {
+    // ⚠️ Normal close also triggers this → DON'T show error
+    eventSource.close();
+  };
+
+  return eventSource;
+};
+
+
+// ==========================
 // 🤖 Document Chatbot
 // ==========================
 export const askDocumentBot = async (documentId, question) => {
@@ -110,7 +140,6 @@ export const loginUser = async (username, password) => {
     password,
   });
 
-  // 🔥 Save token
   localStorage.setItem("token", res.data.access);
 
   return res.data;
@@ -142,7 +171,6 @@ export const getDashboard = async () => {
 // ==========================
 export const getUserDocuments = async () => {
 
-  // Replace with real API later
   return [
     { id: 1, name: "Contract.pdf", date: "2026-03-20" },
     { id: 2, name: "Agreement.docx", date: "2026-03-21" },
