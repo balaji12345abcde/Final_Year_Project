@@ -1,122 +1,85 @@
-from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from sentence_transformers import SentenceTransformer
 from concurrent.futures import ThreadPoolExecutor
-import numpy as np
-
+from .model_loader import embedder
 from .act_data import ACT_DATABASE
 from .reason_extractor import extract_reason
 
-
 # =========================================
-# 🔥 LOAD MODEL ONCE (IMPORTANT)
+# 🔥 PRECOMPUTED EMBEDDINGS
 # =========================================
-bert_model = SentenceTransformer('all-MiniLM-L6-v2')
-
-# Preload descriptions
 DESCRIPTIONS = [a["description"] for a in ACT_DATABASE]
-
-# 🔥 CACHE embeddings (VERY IMPORTANT for speed)
-SECTION_EMBEDDINGS = bert_model.encode(DESCRIPTIONS)
+SECTION_EMBEDDINGS = embedder.encode(DESCRIPTIONS)
 
 
 # =========================================
-# 🔥 SAFE TEXT (PREVENT TOKEN ERROR)
+# 🔥 FAST CHUNKING
 # =========================================
-def safe_text(text, max_words=500):
+def split_text(text, chunk_size=800):
     words = text.split()
-    return " ".join(words[:max_words])
+    return [
+        " ".join(words[i:i + chunk_size])
+        for i in range(0, len(words), chunk_size)
+    ]
 
 
 # =========================================
-# 🔥 BERT SCORE
+# 🔥 FAST PROCESS CHUNK (NO NESTED THREADS)
 # =========================================
-def compute_bert_scores(text):
+def process_chunk(chunk):
 
-    safe_input = safe_text(text)
+    doc_embedding = embedder.encode(chunk)
 
-    doc_embedding = bert_model.encode(safe_input)
-
-    return cosine_similarity(
+    scores = cosine_similarity(
         [doc_embedding],
         SECTION_EMBEDDINGS
     )[0]
 
-
-# =========================================
-# 🔥 TF-IDF SCORE
-# =========================================
-def compute_tfidf_scores(text):
-
-    safe_input = safe_text(text)
-
-    vectorizer = TfidfVectorizer()
-
-    tfidf_matrix = vectorizer.fit_transform(
-        [safe_input] + DESCRIPTIONS
-    )
-
-    return cosine_similarity(
-        tfidf_matrix[0:1],
-        tfidf_matrix[1:]
-    )[0]
-
-
-# =========================================
-# 🔥 MAIN FUNCTION
-# =========================================
-def detect_acts_sections(text):
-
-    # 🔥 LIMIT THREADS (avoid laptop lag)
-    with ThreadPoolExecutor(max_workers=2) as executor:
-
-        tfidf_future = executor.submit(compute_tfidf_scores, text)
-        bert_future = executor.submit(compute_bert_scores, text)
-
-        tfidf_scores = tfidf_future.result()
-        bert_scores = bert_future.result()
-
-    # 🔥 HYBRID SCORE
-    hybrid_scores = (tfidf_scores * 0.4) + (bert_scores * 0.6)
-
     results = []
 
-    # =========================================
-    # 🔥 PROCESS RESULTS
-    # =========================================
-    def process_result(i):
+    for i, score in enumerate(scores):
 
-        score = hybrid_scores[i]
-
-        # 🔥 LOWER THRESHOLD (IMPORTANT FIX)
-        if score > 0.08:
+        if score > 0.15:   # 🔥 slightly stricter
 
             act = ACT_DATABASE[i]
 
-            reason = extract_reason(
-                safe_text(text, 1000),  # small text for speed
-                act["description"]
-            )
+            # ⚡ call reason only for top matches
+            reason = extract_reason(chunk, act["description"])
 
-            return {
+            results.append({
                 "act": act["act"],
                 "section": act["section"],
                 "description": act["description"],
                 "reason": reason,
                 "confidence": float(score)
-            }
+            })
 
-        return None
+    return results
 
-    # 🔥 PARALLEL FILTER
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        output = list(executor.map(process_result, range(len(hybrid_scores))))
 
-    results = [r for r in output if r]
+# =========================================
+# 🔥 FINAL FUNCTION
+# =========================================
+def detect_acts_sections(text):
 
-    # 🔥 SORT & LIMIT
+    chunks = split_text(text)
+
+    all_results = []
+
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        results = list(executor.map(process_chunk, chunks))
+
+    for r in results:
+        all_results.extend(r)
+
+    unique = {}
+
+    for r in all_results:
+        key = (r["act"], r["section"])
+        if key not in unique or r["confidence"] > unique[key]["confidence"]:
+            unique[key] = r
+
     return sorted(
-        results,
+        unique.values(),
         key=lambda x: x["confidence"],
         reverse=True
-    )[:5]
+    )[:10]

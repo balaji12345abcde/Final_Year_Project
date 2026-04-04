@@ -1,14 +1,17 @@
 import axios from "axios";
 
 // ==========================
-// 🌐 BASE API INSTANCE
+// 🌐 BASE CONFIG
 // ==========================
+const BASE_URL = "http://127.0.0.1:8000/api/v1";
+
 const API = axios.create({
-  baseURL: "http://127.0.0.1:8000/api",
+  baseURL: BASE_URL,
+  timeout: 15000, // 🔥 prevent hanging
 });
 
 // ==========================
-// 🔐 ATTACH TOKEN TO REQUEST
+// 🔐 ATTACH TOKEN
 // ==========================
 API.interceptors.request.use(
   (config) => {
@@ -24,7 +27,7 @@ API.interceptors.request.use(
 );
 
 // ==========================
-// ⚠️ HANDLE AUTH ERRORS
+// ⚠️ GLOBAL ERROR HANDLER
 // ==========================
 API.interceptors.response.use(
   (response) => response,
@@ -35,35 +38,32 @@ API.interceptors.response.use(
       window.location.href = "/";
     }
 
+    if (error.response?.status >= 500) {
+      console.error("Server error:", error.response);
+    }
+
     return Promise.reject(error);
   }
 );
 
-
-
 // ==========================
-// 📤 Upload Document
+// 📤 UPLOAD DOCUMENT
 // ==========================
 export const uploadDocument = async (file) => {
-
   const formData = new FormData();
   formData.append("file", file);
 
   const res = await API.post("/documents/upload/", formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
+    headers: { "Content-Type": "multipart/form-data" },
   });
 
   return res.data;
 };
 
-
 // ==========================
-// 🧠 Analyze Document
+// 🧠 ANALYZE DOCUMENT (RUN ONCE)
 // ==========================
 export const analyzeDocument = async (documentId) => {
-
   const res = await API.post("/nlp/analyze/", {
     document_id: documentId,
   });
@@ -71,70 +71,74 @@ export const analyzeDocument = async (documentId) => {
   return res.data;
 };
 
+// ==========================
+// 🔥 GET SAVED ANALYSIS (VERY IMPORTANT)
+// ==========================
+export const getAnalysis = async (docId) => {
+  const res = await API.get(`/nlp/analysis/${docId}/`);
+  return res.data;
+};
 
 // ==========================
-// ⚡ STREAM SUMMARY (FIXED 🔥)
+// ⚡ STREAM SUMMARY (UI ONLY)
 // ==========================
-export const streamSummary = (docId, onData) => {
+export const streamSummary = (docId, onData, onError) => {
 
-  const url = `http://127.0.0.1:8000/api/nlp/stream-summary/${docId}/`;
+  // ❗ EventSource doesn't support headers → token issue
+  const url = `${BASE_URL}/nlp/stream-summary/${docId}/`;
 
   const eventSource = new EventSource(url);
 
   eventSource.onmessage = (event) => {
 
-    // ✅ END SIGNAL
+    if (!event.data) return;
+
     if (event.data === "[DONE]") {
+      onData("[DONE]");
       eventSource.close();
       return;
     }
 
-    if (event.data) {
-      onData(event.data);
-    }
+    onData(event.data);
   };
 
-  eventSource.onerror = () => {
-    // ⚠️ Normal close also triggers this → DON'T show error
+  eventSource.onerror = (err) => {
+    console.warn("Streaming error:", err);
     eventSource.close();
+
+    if (onError) onError(err);
   };
 
   return eventSource;
 };
 
-
 // ==========================
-// 🤖 Document Chatbot
+// 🤖 DOCUMENT CHATBOT
 // ==========================
 export const askDocumentBot = async (documentId, question) => {
-
-  const res = await API.post("/chat/document/", {
+  const res = await API.post("/chat/document-chat/", {
     document_id: documentId,
-    question: question,
+    question,
   });
 
   return res.data;
 };
 
-
 // ==========================
-// ⚖️ General Legal Chatbot
+// ⚖️ GENERAL CHATBOT
 // ==========================
 export const askLegalBot = async (question) => {
-
-  const res = await API.post("/chat/general/", {
-    question: question,
+  const res = await API.post("/chat/general-chat/", {
+    question,
   });
 
   return res.data;
 };
 
-
 // ==========================
-// 🔐 LOGIN (JWT)
+// 🔐 LOGIN
 // ==========================
 export const loginUser = async (username, password) => {
-
   const res = await API.post("/users/login/", {
     username,
     password,
@@ -145,37 +149,54 @@ export const loginUser = async (username, password) => {
   return res.data;
 };
 
-
 // ==========================
 // 📝 REGISTER
 // ==========================
 export const registerUser = async (data) => {
-
   const res = await API.post("/users/register/", data);
   return res.data;
 };
-
 
 // ==========================
 // 📊 DASHBOARD
 // ==========================
 export const getDashboard = async () => {
-
   const res = await API.get("/documents/dashboard/");
   return res.data;
 };
 
-
 // ==========================
-// 📂 USER DOCUMENTS (FUTURE)
+// 🌍 TRANSLATION (DB + CACHE)
 // ==========================
-export const getUserDocuments = async () => {
+export const translateSummary = async (text, lang, docId) => {
 
-  return [
-    { id: 1, name: "Contract.pdf", date: "2026-03-20" },
-    { id: 2, name: "Agreement.docx", date: "2026-03-21" },
-  ];
+  // 🔥 Better cache key
+  const cacheKey = `summary_${docId}_${lang}_${btoa(text).slice(0, 30)}`;
+
+  // 🔥 FRONTEND CACHE
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) {
+    return { translated_text: cached };
+  }
+
+  const res = await API.post("/nlp/translate/", {
+    text,
+    lang,
+    document_id: docId   // ✅ CRITICAL FIX
+  });
+
+  // 🔥 SAVE CACHE
+  localStorage.setItem(cacheKey, res.data.translated_text);
+
+  return res.data;
 };
 
+// ==========================
+// 🗑️ DELETE DOCUMENT
+// ==========================
+export const deleteDocument = async (docId) => {
+  const res = await API.delete(`/documents/delete/${docId}/`);
+  return res.data;
+};
 
 export default API;

@@ -10,44 +10,88 @@ export default function DocumentChatbot({ docId, close }) {
   const [loading, setLoading] = useState(false);
 
   const chatEndRef = useRef(null);
+  const abortRef = useRef(null);
 
-  // 🔽 Auto scroll
+  // =========================
+  // 🔽 AUTO SCROLL
+  // =========================
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chat, loading]);
 
+  // =========================
+  // 💾 LOAD CHAT CACHE
+  // =========================
+  useEffect(() => {
+    const saved = localStorage.getItem(`chat_${docId}`);
+    if (saved) {
+      setChat(JSON.parse(saved));
+    }
+  }, [docId]);
+
+  // =========================
+  // 💾 SAVE CHAT CACHE
+  // =========================
+  useEffect(() => {
+    localStorage.setItem(`chat_${docId}`, JSON.stringify(chat));
+  }, [chat, docId]);
+
+  // =========================
+  // 🤖 ASK QUESTION
+  // =========================
   const ask = async () => {
 
-    if (!question.trim()) return;
+    if (!question.trim() || loading) return;
 
-    const userMsg = { type: "q", text: question };
+    const currentQuestion = question.trim();
 
-    // ✅ Add user message immediately
-    setChat((prev) => [...prev, userMsg]);
+    const userMsg = { type: "q", text: currentQuestion };
+
+    setChat(prev => [...prev, userMsg]);
+    setQuestion("");
 
     try {
 
       setLoading(true);
 
-      const currentQuestion = question;
-      setQuestion("");
+      // 🔥 Cancel previous request if any
+      if (abortRef.current) {
+        abortRef.current.abort();
+      }
+
+      abortRef.current = new AbortController();
 
       const res = await askDocumentBot(docId, currentQuestion);
 
-      const botMsg = {
-        type: "a",
-        text: res.answer || "No answer found"
-      };
+      const answer = res.answer || "No answer found";
 
-      setChat((prev) => [...prev, botMsg]);
+      // =========================
+      // 🔥 TYPING EFFECT
+      // =========================
+      let currentText = "";
+      const botMsg = { type: "a", text: "" };
+
+      setChat(prev => [...prev, botMsg]);
+
+      for (let char of answer) {
+        currentText += char;
+
+        await new Promise(r => setTimeout(r, 10));
+
+        setChat(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1].text = currentText;
+          return [...updated];
+        });
+      }
 
     } catch (err) {
 
       console.error(err);
 
-      setChat((prev) => [
+      setChat(prev => [
         ...prev,
-        { type: "a", text: "⚠️ Error getting response" }
+        { type: "a", text: "⚠️ Unable to fetch response. Try again." }
       ]);
 
     } finally {
@@ -68,8 +112,8 @@ export default function DocumentChatbot({ docId, close }) {
       }}
     >
 
-      {/* 🌫 Glass Container */}
-      <div className="glass flex flex-col h-full p-4 text-white">
+      {/* Glass Container */}
+      <div className="flex flex-col h-full p-4 text-white backdrop-blur-lg">
 
         {/* Header */}
         <div className="flex justify-between items-center mb-4">
@@ -98,20 +142,21 @@ export default function DocumentChatbot({ docId, close }) {
 
           {chat.map((msg, i) => (
 
-            <div
+            <motion.div
               key={i}
-              className={`p-3 rounded-xl max-w-[80%] text-sm ${
-                msg.type === "q"
-                  ? "bg-white/20 ml-auto backdrop-blur"
-                  : "bg-white/30 text-white"
-              }`}
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`p-3 rounded-xl max-w-[80%] text-sm ${msg.type === "q"
+                  ? "bg-white/20 ml-auto"
+                  : "bg-white/30"
+                }`}
             >
               {msg.text}
-            </div>
+            </motion.div>
 
           ))}
 
-          {/* 🔄 Loader */}
+          {/* Loader */}
           {loading && (
             <div className="bg-white/30 p-3 rounded-xl w-fit">
               <Loader />
@@ -129,6 +174,7 @@ export default function DocumentChatbot({ docId, close }) {
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && ask()}
+            disabled={loading}
             className="flex-1 p-2 rounded bg-white/20 text-white placeholder-white/70 outline-none"
             placeholder="Ask about document..."
           />
@@ -136,7 +182,10 @@ export default function DocumentChatbot({ docId, close }) {
           <button
             onClick={ask}
             disabled={loading}
-            className="bg-white text-indigo-600 px-4 rounded font-semibold hover:scale-105 transition"
+            className={`px-4 rounded font-semibold transition ${loading
+                ? "bg-gray-300 text-gray-500"
+                : "bg-white text-indigo-600 hover:scale-105"
+              }`}
           >
             Send
           </button>

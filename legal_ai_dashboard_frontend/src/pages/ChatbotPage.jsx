@@ -11,46 +11,59 @@ export default function ChatbotPage() {
 
   const chatEndRef = useRef(null);
 
-  // 🔽 Auto scroll
+  // 🔥 LOAD CACHE
   useEffect(() => {
+    const saved = localStorage.getItem("general_chat");
+    if (saved) setChat(JSON.parse(saved));
+  }, []);
+
+  // 🔥 SAVE CACHE
+  useEffect(() => {
+    localStorage.setItem("general_chat", JSON.stringify(chat));
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chat, loading]);
 
   const ask = async () => {
 
-    if (!question.trim()) return;
+    if (!question.trim() || loading) return;
 
-    const userMsg = { type: "q", text: question };
+    const q = question.trim();
 
-    setChat((prev) => [...prev, userMsg]);
+    setChat(prev => [...prev, { type: "q", text: q }]);
+    setQuestion("");
 
     try {
 
       setLoading(true);
 
-      const currentQuestion = question;
-      setQuestion("");
+      const res = await askLegalBot(q);
+      const answer = res.answer || "No answer available";
 
-      const res = await askLegalBot(currentQuestion);
+      // 🔥 typing effect
+      let text = "";
 
-      const botMsg = {
-        type: "a",
-        text: res.answer || "No answer available"
-      };
+      setChat(prev => [...prev, { type: "a", text: "" }]);
 
-      setChat((prev) => [...prev, botMsg]);
+      for (let char of answer) {
+        text += char;
+
+        await new Promise(r => setTimeout(r, 10));
+
+        setChat(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1].text = text;
+          return [...updated];
+        });
+      }
 
     } catch (err) {
 
-      console.error(err);
-
-      setChat((prev) => [
+      setChat(prev => [
         ...prev,
         { type: "a", text: "⚠️ Error getting response" }
       ]);
 
     } finally {
-
       setLoading(false);
     }
   };
@@ -59,98 +72,68 @@ export default function ChatbotPage() {
 
     <MainLayout>
 
-      {/* 🌈 Background */}
-      <div className="bg-main  p-6 text-white">
+      <div className="p-6 text-white">
 
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-        >
+        <h1 className="text-2xl font-bold mb-6">
+          ⚖️ Legal Chatbot
+        </h1>
 
-          <h1 className="text-2xl font-bold mb-6">
-            ⚖ Legal Chatbot
-          </h1>
+        <div className="bg-white/20 p-6 rounded-xl h-[65vh] flex flex-col">
 
-          {/* 💬 Chat Container */}
-          <div className="glass p-6 shadow-xl h-[65vh] flex flex-col">
+          {/* CHAT */}
+          <div className="flex-1 overflow-y-auto space-y-3">
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto mb-4 space-y-3 pr-2">
+            {chat.length === 0 && (
+              <p className="opacity-70">
+                Ask any legal question...
+              </p>
+            )}
 
-              {chat.length === 0 && (
-                <p className="text-sm opacity-70">
-                  Ask any legal question...
-                </p>
-              )}
-
-              {chat.map((msg, i) => (
-
-                <div
-                  key={i}
-                  className={`flex ${
-                    msg.type === "q"
-                      ? "justify-end"
-                      : "justify-start"
+            {chat.map((msg, i) => (
+              <div
+                key={i}
+                className={`flex ${msg.type === "q" ? "justify-end" : "justify-start"
                   }`}
-                >
-
-                  <div
-                    className={`px-4 py-2 rounded-xl max-w-xs text-sm ${
-                      msg.type === "q"
-                        ? "bg-white/20 backdrop-blur"
-                        : "bg-white/30 text-white"
-                    }`}
-                  >
-                    {msg.text}
-                  </div>
-
-                </div>
-
-              ))}
-
-              {/* 🔄 Loader */}
-              {loading && (
-                <div className="flex justify-start">
-                  <div className="bg-white/30 px-4 py-2 rounded-xl flex gap-1">
-                    <div className="w-2 h-2 bg-white rounded-full animate-bounce"></div>
-                    <div className="w-2 h-2 bg-white rounded-full animate-bounce delay-100"></div>
-                    <div className="w-2 h-2 bg-white rounded-full animate-bounce delay-200"></div>
-                  </div>
-                </div>
-              )}
-
-              <div ref={chatEndRef}></div>
-
-            </div>
-
-            {/* ✍ Input */}
-            <div className="flex gap-2">
-
-              <input
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && ask()}
-                className="flex-1 p-2 rounded bg-white/20 text-white placeholder-white/70 outline-none"
-                placeholder="Ask legal question..."
-              />
-
-              <button
-                onClick={ask}
-                disabled={loading}
-                className="bg-white text-indigo-600 px-4 rounded font-semibold hover:scale-105 transition"
               >
-                Send
-              </button>
+                <div className="bg-white/30 px-4 py-2 rounded-xl max-w-xs">
+                  {msg.text}
+                </div>
+              </div>
+            ))}
 
-            </div>
+            {loading && (
+              <p className="text-sm opacity-70">Typing...</p>
+            )}
+
+            <div ref={chatEndRef}></div>
 
           </div>
 
-        </motion.div>
+          {/* INPUT */}
+          <div className="flex gap-2 mt-3">
+
+            <input
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && ask()}
+              className="flex-1 p-2 rounded bg-white/20"
+              placeholder="Ask legal question..."
+            />
+
+            <button
+              onClick={ask}
+              disabled={loading}
+              className="bg-white text-black px-4 rounded"
+            >
+              Send
+            </button>
+
+          </div>
+
+        </div>
 
       </div>
 
     </MainLayout>
-
   );
 }

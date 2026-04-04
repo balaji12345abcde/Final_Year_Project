@@ -1,220 +1,79 @@
-"""import nltk
-from transformers import pipeline, AutoTokenizer
-from sentence_transformers import SentenceTransformer, util
 from concurrent.futures import ThreadPoolExecutor
+from .model_loader import tokenizer, model, device
+import torch
 
-nltk.download("punkt")
-
-# Load once
-summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
-tokenizer = AutoTokenizer.from_pretrained("sshleifer/distilbart-cnn-12-6")
-bert_model = SentenceTransformer("all-MiniLM-L6-v2")
-
-LEGAL_HEADINGS = [
-    "FACTS", "BACKGROUND", "INTRODUCTION", "ARGUMENTS",
-    "ANALYSIS", "JUDGMENT", "DECISION", "ORDER",
-    "PARTIES", "PAYMENT TERMS", "CONFIDENTIALITY",
-    "TERMINATION", "SCOPE OF WORK"
-]
-
-
-# -------------------------------
-# Faster Heading Detection
-# -------------------------------
-def detect_headings_with_bert(text):
-
-    lines = text.split("\n")
-    sections = {}
-    current_heading = "INTRODUCTION"
-    sections[current_heading] = ""
-
-    heading_embeddings = bert_model.encode(LEGAL_HEADINGS)
-
-    for line in lines:
-        line = line.strip()
-        if len(line) < 5:
-            continue
-
-        line_embedding = bert_model.encode(line)
-        similarity = util.cos_sim(line_embedding, heading_embeddings)
-
-        if similarity.max().item() > 0.7:
-            current_heading = line
-            sections[current_heading] = ""
-        else:
-            sections[current_heading] += " " + line
-
-    return sections
-
-
-# -------------------------------
-# Smart Chunking
-# -------------------------------
-def chunk_text(text, max_tokens=700):
-
-    tokens = tokenizer.encode(text)
-
-    if len(tokens) < 800:
-        return [text]   # small text no chunk
-
+# =========================
+# 🔥 FAST CHUNKING (WORD BASED)
+# =========================
+def chunk_text(text, chunk_size=400):
+    words = text.split()
     chunks = []
-    for i in range(0, len(tokens), max_tokens):
-        chunk = tokenizer.decode(tokens[i:i+max_tokens])
-        chunks.append(chunk)
+
+    for i in range(0, len(words), chunk_size):
+        chunks.append(" ".join(words[i:i + chunk_size]))
 
     return chunks
 
 
-# -------------------------------
-# Fast Chunk Summarization
-# -------------------------------
+# =========================
+# 🔥 BART SUMMARIZATION
+# =========================
 def summarize_chunk(chunk):
 
     try:
-        result = summarizer(
+        inputs = tokenizer(
             chunk,
-            max_length=120,
-            min_length=40,
-            do_sample=False
+            return_tensors="pt",
+            truncation=True,
+            max_length=512
         )
-        return result[0]["summary_text"]
 
-    except Exception:
+        # ✅ FIX: move tensors properly
+        inputs = {k: v.to(device) for k, v in inputs.items()}
+
+        with torch.no_grad():
+            summary_ids = model.generate(
+                inputs["input_ids"],
+                max_length=120,
+                min_length=40,
+                num_beams=2,          # ⚡ faster
+                early_stopping=True
+            )
+
+        return tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+
+    except Exception as e:
+        print("Chunk error:", e)
         return ""
 
 
-# -------------------------------
-# Parallel Section Summary
-# -------------------------------
-def summarize_section(text):
-
-    chunks = chunk_text(text)
-
-    with ThreadPoolExecutor() as executor:
-        summaries = list(executor.map(summarize_chunk, chunks))
-
-    summaries = [s for s in summaries if s]
-
-    return " ".join(summaries)
-
-
-# -------------------------------
-# FINAL STRUCTURED SUMMARY
-# -------------------------------
-def generate_structured_summary(text):
-
-    # small doc fast path
-    if len(text.split()) < 120:
-        return {
-            "SUMMARY": summarize_chunk(text)
-        }
-
-    sections = detect_headings_with_bert(text)
-
-    summaries = {}
-
-    def process_section(item):
-        heading, content = item
-        content = content.strip()
-
-        if len(content.split()) < 50:
-            return None
-
-        return (heading, summarize_section(content))
-
-    with ThreadPoolExecutor() as executor:
-        results = list(executor.map(process_section, sections.items()))
-
-    for r in results:
-        if r:
-            summaries[r[0]] = r[1]
-
-    return summaries
-"""
-import nltk
-from transformers import pipeline, AutoTokenizer
-
-nltk.download("punkt")
-
-# =========================================
-# 🔥 MODEL (BEST BALANCE)
-# =========================================
-summarizer = pipeline(
-    "summarization",
-    model="sshleifer/distilbart-cnn-12-6",
-    device=-1
-)
-
-tokenizer = AutoTokenizer.from_pretrained("sshleifer/distilbart-cnn-12-6")
-
-
-# =========================================
-# 🔥 BIGGER CHUNKS (LESS SPLIT)
-# =========================================
-"""def chunk_text(text, max_tokens=900):
-
-    tokens = tokenizer.encode(text)
-
-    chunks = []
-    for i in range(0, len(tokens), max_tokens):
-        chunk = tokenizer.decode(tokens[i:i + max_tokens])
-        chunks.append(chunk)
-
-    return chunks
-"""
-def chunk_text(text, max_tokens=500):
-
-    tokens = tokenizer.encode(text, truncation=False)
-
-    chunks = []
-
-    for i in range(0, len(tokens), max_tokens):
-        chunk_tokens = tokens[i:i + max_tokens]
-        chunk = tokenizer.decode(chunk_tokens, skip_special_tokens=True)
-        chunks.append(chunk)
-
-    return chunks
-
-# =========================================
-# 🔥 MUCH LONGER SUMMARY
-# =========================================
-def summarize_chunk(chunk):
-
-    try:
-        result = summarizer(
-            chunk,
-            max_length=250,   # 🔥 MUCH LONGER
-            min_length=120,   # 🔥 FORCE LONG OUTPUT
-            do_sample=False
-        )
-
-        return result[0]["summary_text"]
-
-    except Exception:
-        return ""
-
-
-# =========================================
-# 🔥 FINAL SUMMARY (NO COMPRESSION)
-# =========================================
+# =========================
+# 🚀 FINAL SUMMARY ENGINE
+# =========================
 def generate_summary(text):
 
     chunks = chunk_text(text)
 
-    summaries = []
+    # 🔥 GPU SAFE → no threading
+    if device.type == "cuda":
+        summaries = [summarize_chunk(c) for c in chunks]
 
-    for chunk in chunks:
+    else:
+        # 🔥 CPU → parallel
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            summaries = list(executor.map(summarize_chunk, chunks))
 
-        # skip very small chunks
-        if len(chunk.split()) < 50:
-            continue
+    summaries = [s for s in summaries if s]
 
-        summary = summarize_chunk(chunk)
+    # =========================
+    # 🔥 FINAL REFINEMENT
+    # =========================
+    if len(summaries) > 1:
+        combined = " ".join(summaries)
+        final_summary = summarize_chunk(combined)
+    else:
+        final_summary = summaries[0] if summaries else ""
 
-        if summary:
-            summaries.append(summary)
-
-    # 🔥 DO NOT MERGE INTO ONE LINE
     return {
-        "SUMMARY": "\n\n".join(summaries)   # ✅ multi-paragraph
+        "SUMMARY": final_summary
     }

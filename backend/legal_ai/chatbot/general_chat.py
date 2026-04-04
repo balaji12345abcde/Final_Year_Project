@@ -1,42 +1,75 @@
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from transformers import pipeline
+from nlp_engine.model_loader import text_generator
+import re
 
-# Load model once
-legal_generator = pipeline(
-    "text2text-generation",
-    model="google/flan-t5-base"
-)
+# =========================
+# 🔥 GREETING DETECTION (SMART)
+# =========================
+def is_greeting(text):
 
-class GeneralChatbot(APIView):
+    text = text.lower()
 
-    def post(self, request):
+    patterns = [
+        r"\bhi\b", r"\bhello\b", r"\bhey\b",
+        r"how are you", r"what's up", r"good (morning|evening|afternoon)"
+    ]
 
-        question = request.data.get("question")
+    return any(re.search(p, text) for p in patterns)
 
-        if not question:
-            return Response({"answer": "Please ask a legal question."})
 
-        prompt = f"""
-You are an Indian legal assistant.
+# =========================
+# 🔥 GREETING RESPONSE
+# =========================
+def handle_greeting():
+    return "Hello 👋 I'm your AI Legal Assistant. How can I help you today?"
 
-Answer the question based only on Indian law basis.
-If the question mentions IPC sections, explain the correct section meaning and punishment.
 
-Question: {question}
+# =========================
+# 🔥 THANKS DETECTION
+# =========================
+def is_thanks(text):
+    return "thank" in text.lower()
 
-Answer clearly in india act and section and legal based:
+
+# =========================
+# 🔥 LEGAL RESPONSE (CONTROLLED)
+# =========================
+def generate_legal_answer(question):
+
+    prompt = f"""
+You are an expert Indian legal assistant.
+
+Answer clearly based on Indian law.
+Explain simply.
+Mention IPC/CrPC sections if relevant.
+
+Question:
+{question}
+
+Answer:
 """
 
-        result = legal_generator(
-            prompt,
-            max_length=50,
-            do_sample=False,
-            temperature=0.7
-        )
+    result = text_generator(
+        prompt,
+        max_length=120,
+        min_length=40,
+        do_sample=False   # 🔥 IMPORTANT
+    )
 
-        answer = result[0]["generated_text"]
+    return result[0]["generated_text"].replace(prompt, "").strip()
 
-        return Response({
-            "answer": answer
-        })
+
+# =========================
+# 🔥 MAIN FUNCTION
+# =========================
+def Generalchatbot(question):
+
+    if not question:
+        return "Please ask a legal question."
+
+    if is_greeting(question):
+        return handle_greeting()
+
+    if is_thanks(question):
+        return "You're welcome 😊 Let me know if you need legal help."
+
+    return generate_legal_answer(question)

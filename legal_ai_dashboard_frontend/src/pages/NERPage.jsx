@@ -14,115 +14,117 @@ export default function NERPage() {
   } = useAnalysis();
 
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
 
-    // 🔥 Load document into context (important for refresh)
     if (!docId) {
-      const savedDoc = localStorage.getItem("docId");
-      if (savedDoc) {
-        loadDocument(savedDoc);
-      }
+      const saved = localStorage.getItem("docId");
+      if (saved) loadDocument(saved);
       return;
     }
 
-    // ✅ If already exists → skip API call
+    // 🔥 CACHE CHECK
+    const cached = localStorage.getItem(`analysis_${docId}`);
+    if (cached) {
+      setAnalysisData(JSON.parse(cached));
+      return;
+    }
+
     if (analysisData) return;
 
     setLoading(true);
 
     analyzeDocument(docId)
-      .then((res) => {
+      .then(res => {
         setAnalysisData(res);
+        localStorage.setItem(`analysis_${docId}`, JSON.stringify(res));
       })
-      .catch((err) => {
-        console.error("NER fetch error:", err);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+      .catch(() => setError("Failed to load entities"))
+      .finally(() => setLoading(false));
 
   }, [docId]);
 
   const entities = analysisData?.entities || [];
 
-  // 🎨 Color mapping
-  const getColor = (label) => {
-    switch (label) {
-      case "PERSON":
-        return "bg-blue-400/30";
-      case "ORG":
-        return "bg-green-400/30";
-      case "GPE": // spaCy label
-        return "bg-yellow-400/30";
-      case "DATE":
-        return "bg-pink-400/30";
-      default:
-        return "bg-white/20";
-    }
+  const grouped = {};
+  entities.forEach(e => {
+    if (!grouped[e.label]) grouped[e.label] = [];
+    grouped[e.label].push(e.text);
+  });
+
+  Object.keys(grouped).forEach(key => {
+    grouped[key] = [...new Set(grouped[key])];
+  });
+
+  const colorMap = {
+    PERSON: "bg-blue-100 text-blue-700",
+    ORG: "bg-green-100 text-green-700",
+    GPE: "bg-yellow-100 text-yellow-700",
+    DATE: "bg-pink-100 text-pink-700"
   };
 
   return (
-
     <MainLayout>
+      <div className="p-6 text-white">
 
-      <div className="bg-main min-h-screen p-6 text-white">
+        <h1 className="text-2xl font-bold mb-6">🧠 Named Entities</h1>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
+        {loading && (
+          <div className="space-y-3">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="h-16 bg-white/20 animate-pulse rounded-xl"></div>
+            ))}
+          </div>
+        )}
 
-          {/* Title */}
-          <h1 className="text-2xl font-bold mb-6">
-            Named Entities
-          </h1>
+        {error && <p className="text-red-400">{error}</p>}
 
-          {/* 🔄 Loading */}
-          {loading && (
-            <p className="opacity-80">Loading entities...</p>
-          )}
+        {!loading && entities.length > 0 && (
+          <div className="space-y-6">
 
-          {/* ✅ Entities */}
-          {!loading && entities.length > 0 && (
+            {Object.entries(grouped).map(([type, values]) => (
 
-            <div className="glass p-6 shadow-lg">
+              <motion.div
+                key={type}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="bg-white/90 p-5 rounded-xl text-black"
+              >
 
-              <div className="flex flex-wrap gap-3">
+                <h3 className="font-semibold mb-3">
+                  {type} ({values.length})
+                </h3>
 
-                {entities.map((e, i) => (
+                <div className="flex flex-wrap gap-3">
 
-                  <motion.span
-                    key={i}
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ delay: i * 0.05 }}
-                    className={`px-3 py-1 rounded-full text-sm backdrop-blur border border-white/20 ${getColor(e.label)}`}
-                  >
-                    {e.text} ({e.label})
-                  </motion.span>
+                  {values.map((val, i) => (
+                    <motion.span
+                      key={i}
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      className={`px-3 py-1 rounded-full text-sm ${colorMap[type]}`}
+                    >
+                      {val}
+                    </motion.span>
+                  ))}
 
-                ))}
+                </div>
 
-              </div>
+              </motion.div>
 
-            </div>
+            ))}
 
-          )}
+          </div>
+        )}
 
-          {/* ❌ No Data */}
-          {!loading && entities.length === 0 && (
-
-            <div className="glass p-6 text-center opacity-80">
-              No entities found. Upload and analyze a document first.
-            </div>
-
-          )}
-
-        </motion.div>
+        {!loading && entities.length === 0 && (
+          <div className="bg-white/20 p-6 rounded-xl text-center">
+            No entities found
+          </div>
+        )}
 
       </div>
-
     </MainLayout>
   );
 }

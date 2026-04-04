@@ -1,91 +1,49 @@
-"""from transformers import pipeline, AutoTokenizer
-import torch
-
-# GPU setup
-device = 0 if torch.cuda.is_available() else -1
-
-summarizer = pipeline(
-    "summarization",
-    model="sshleifer/distilbart-cnn-12-6",
-    device=device  # CPU safe
-)
-
-tokenizer = AutoTokenizer.from_pretrained("sshleifer/distilbart-cnn-12-6")
-
-
-def chunk_text(text, max_tokens=700):
-
-    tokens = tokenizer.encode(text)
-
-    if len(tokens) < 800:
-        return [text]
-
-    chunks = []
-    for i in range(0, len(tokens), max_tokens):
-        chunk = tokenizer.decode(tokens[i:i+max_tokens])
-        chunks.append(chunk)
-
-    return chunks
-
-
-def summarize_chunk(chunk):
-
-    try:
-        result = summarizer(
-            chunk,
-            max_length=200,
-            min_length=100,
-            do_sample=False
-        )
-        return result[0]["summary_text"]
-
-    except Exception:
-        return ""
-"""
-from transformers import pipeline, AutoTokenizer
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from .model_loader import tokenizer, model, device
 import torch
 
 # =========================
-# 🔥 GPU SUPPORT
+# 🔥 FAST CHUNKING (WORD BASED)
 # =========================
-device = 0 if torch.cuda.is_available() else -1
+def chunk_text(text, chunk_size=400):
+    words = text.split()
 
-summarizer = pipeline(
-    "summarization",
-    model="sshleifer/distilbart-cnn-12-6",
-    device=device
-)
-
-tokenizer = AutoTokenizer.from_pretrained("sshleifer/distilbart-cnn-12-6")
+    for i in range(0, len(words), chunk_size):
+        yield " ".join(words[i:i + chunk_size])
 
 
 # =========================
-# 🔥 SAFE CHUNKING (CRITICAL FIX)
+# 🔥 STREAM GENERATOR
 # =========================
-def chunk_text(text, max_tokens=500):   # 🔥 REDUCED SIZE
+def summarize_stream(text):
 
-    tokens = tokenizer.encode(text, truncation=False)
+    chunks = list(chunk_text(text))
 
-    chunks = []
+    # 🔥 GPU SAFE (no threading)
+    if device.type == "cuda":
 
-    for i in range(0, len(tokens), max_tokens):
-        chunk_tokens = tokens[i:i + max_tokens]
+        for chunk in chunks:
+            result = summarize_chunk(chunk)
+            if result:
+                yield result
 
-        # 🔥 SAFE DECODE
-        chunk = tokenizer.decode(chunk_tokens, skip_special_tokens=True)
+    else:
+        # 🔥 CPU parallel
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures = [executor.submit(summarize_chunk, c) for c in chunks]
 
-        chunks.append(chunk)
-
-    return chunks
+            for future in as_completed(futures):
+                result = future.result()
+                if result:
+                    yield result
 
 
 # =========================
-# 🔥 SAFE SUMMARIZATION
+# 🔥 BART SUMMARIZATION
 # =========================
 def summarize_chunk(chunk):
 
     try:
-        # 🔥 FORCE TRUNCATION (IMPORTANT)
         inputs = tokenizer(
             chunk,
             return_tensors="pt",
@@ -93,14 +51,19 @@ def summarize_chunk(chunk):
             max_length=512
         )
 
-        result = summarizer(
-            tokenizer.decode(inputs["input_ids"][0]),
-            max_length=200,   # 🔥 BIGGER OUTPUT
-            min_length=80,    # 🔥 MORE CONTENT
-            do_sample=False
-        )
+        # ✅ FIX: move tensors correctly
+        inputs = {k: v.to(device) for k, v in inputs.items()}
 
-        return result[0]["summary_text"]
+        with torch.no_grad():
+            summary_ids = model.generate(
+                inputs["input_ids"],
+                max_length=100,
+                min_length=30,
+                num_beams=2,  # ⚡ balance speed + quality
+                early_stopping=True
+            )
+
+        return tokenizer.decode(summary_ids[0], skip_special_tokens=True)
 
     except Exception as e:
         print("Chunk error:", e)

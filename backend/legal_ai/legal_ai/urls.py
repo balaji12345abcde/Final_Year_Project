@@ -5,17 +5,14 @@ from django.conf.urls.static import static
 
 urlpatterns = [
 
-    path("admin/",admin.site.urls),
-    # ✅ DOCUMENTS APP (upload + dashboard)
-    path("api/documents/", include("documents.urls")),
+    path("admin/", admin.site.urls),
 
-    # ✅ NLP ENGINE
-    path("api/nlp/", include("nlp_engine.urls")),
-
-    # ✅ CHATBOT
-    path("api/chat/", include("chatbot.urls")),
-
-    path("api/users/", include("users.urls")),
+    # 🔥 API VERSIONING (IMPORTANT)
+    path("api/v1/documents/", include("documents.urls")),
+    path("api/v1/nlp/", include("nlp_engine.urls")),
+    path("api/v1/chat/", include("chatbot.urls")),
+    path("api/v1/users/", include("users.urls")),
 ]
 
+# 🔥 MEDIA FILES
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

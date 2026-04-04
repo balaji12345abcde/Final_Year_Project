@@ -1,26 +1,20 @@
-import spacy
+from .model_loader import nlp
 
-nlp = spacy.load("en_core_web_sm")
-
+# =========================================
+# 🔥 FAST BATCH NER (NO THREADS NEEDED)
+# =========================================
 def extract_entities(text):
 
-    doc = nlp(text)
+    docs = list(nlp.pipe([text], batch_size=50))  # 🔥 very fast
 
-    unique_entities = set()
+    entities = set()
 
-    for ent in doc.ents:
+    for doc in docs:
+        for ent in doc.ents:
+            if ent.label_ in ["PERSON", "ORG", "GPE", "DATE"]:
+                entities.add((ent.text.strip(), ent.label_))
 
-        if ent.label_ in ["PERSON","ORG","GPE","DATE"]:
-
-            unique_entities.add((ent.text, ent.label_))
-
-    entities = []
-
-    for text,label in unique_entities:
-
-        entities.append({
-            "text": text,
-            "label": label
-        })
-
-    return entities
+    return [
+        {"text": t, "label": l}
+        for t, l in entities
+    ]

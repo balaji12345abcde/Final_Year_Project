@@ -14,117 +14,98 @@ export default function ActsPage() {
   } = useAnalysis();
 
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
 
-    // 🔥 Load document into context (important for refresh)
     if (!docId) {
-      const savedDoc = localStorage.getItem("docId");
-      if (savedDoc) {
-        loadDocument(savedDoc);
-      }
+      const saved = localStorage.getItem("docId");
+      if (saved) loadDocument(saved);
       return;
     }
 
-    // ✅ If already exists → skip API call
+    const cached = localStorage.getItem(`analysis_${docId}`);
+    if (cached) {
+      setAnalysisData(JSON.parse(cached));
+      return;
+    }
+
     if (analysisData) return;
 
     setLoading(true);
 
     analyzeDocument(docId)
-      .then((res) => {
+      .then(res => {
         setAnalysisData(res);
+        localStorage.setItem(`analysis_${docId}`, JSON.stringify(res));
       })
-      .catch((err) => {
-        console.error("Acts fetch error:", err);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+      .catch(() => setError("Failed to load acts"))
+      .finally(() => setLoading(false));
 
   }, [docId]);
 
   const acts = analysisData?.acts || [];
 
   return (
-
     <MainLayout>
+      <div className="p-6 text-white">
 
-      <div className="bg-main min-h-screen p-6 text-white">
+        <h1 className="text-2xl font-bold mb-6">⚖️ Acts & Sections</h1>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
+        {loading && (
+          <div className="space-y-3">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="h-20 bg-white/20 animate-pulse rounded-xl"></div>
+            ))}
+          </div>
+        )}
 
-          {/* Title */}
-          <h1 className="text-2xl font-bold mb-6">
-            Acts & Sections
-          </h1>
+        {error && <p className="text-red-400">{error}</p>}
 
-          {/* 🔄 Loading */}
-          {loading && (
-            <p className="opacity-80">Loading acts...</p>
-          )}
+        {!loading && acts.length > 0 && (
+          <div className="space-y-4">
 
-          {/* ✅ Acts */}
-          {!loading && acts.length > 0 && (
+            {acts.map((a, i) => (
 
-            <div className="space-y-4">
+              <motion.div
+                key={i}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="bg-white/90 p-5 rounded-xl text-black"
+              >
 
-              {acts.map((a, i) => (
+                <h3 className="font-semibold">
+                  {a.act} - Section {a.section}
+                </h3>
 
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.1 }}
-                  className="glass p-5 shadow-lg hover:scale-[1.02] transition"
-                >
+                <p className="mt-2 text-sm">{a.description}</p>
 
-                  <h3 className="font-semibold text-lg">
-                    {a.act} - Section {a.section}
-                  </h3>
+                {a.reason && (
+                  <p className="mt-2 text-xs text-gray-600">
+                    Reason: {a.reason}
+                  </p>
+                )}
 
-                  {a.description && (
-                    <p className="mt-2 text-sm">
-                      {a.description}
-                    </p>
-                  )}
+                {a.confidence && (
+                  <p className="mt-1 text-xs font-semibold text-indigo-600">
+                    Confidence: {(a.confidence * 100).toFixed(1)}%
+                  </p>
+                )}
 
-                  {a.reason && (
-                    <p className="mt-2 text-xs opacity-90">
-                      Reason: {a.reason}
-                    </p>
-                  )}
+              </motion.div>
 
-                  {a.confidence && (
-                    <p className="mt-1 text-xs text-white-700 font-semibold">
-                      Confidence: {(a.confidence * 100).toFixed(2)}%
-                    </p>
-                  )}
+            ))}
 
-                </motion.div>
+          </div>
+        )}
 
-              ))}
-
-            </div>
-
-          )}
-
-          {/* ❌ No Data */}
-          {!loading && acts.length === 0 && (
-
-            <div className="glass p-6 text-center opacity-80">
-              No acts detected. Upload and analyze a document first.
-            </div>
-
-          )}
-
-        </motion.div>
+        {!loading && acts.length === 0 && (
+          <div className="bg-white/20 p-6 rounded-xl text-center">
+            No acts detected
+          </div>
+        )}
 
       </div>
-
     </MainLayout>
   );
 }

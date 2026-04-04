@@ -1,23 +1,21 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from documents.models import Document
-
-from concurrent.futures import ThreadPoolExecutor
 from django.http import StreamingHttpResponse
-
-import time
+from documents.models import Document
 
 from .summarizer import generate_summary
 from .ner import extract_entities
 from .risk_analyzer import calculate_risk
 from .act_section_detector import detect_acts_sections
 from .document_classifier import classify_document
+from .streaming_summarizer import summarize_chunk, chunk_text
+from .translator import translate_text
 
-from .streaming_summarizer import chunk_text, summarize_chunk
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 # =====================================================
-# 🔥 STREAMING SUMMARY (FIXED & STABLE)
+# 🔥 STREAM SUMMARY (UI ONLY)
 # =====================================================
 def stream_summary(request, doc_id):
 
@@ -25,43 +23,30 @@ def stream_summary(request, doc_id):
         doc = Document.objects.get(id=doc_id)
         text = doc.extracted_text
 
-        chunks = chunk_text(text)
+        chunks = list(chunk_text(text))
 
         def generate():
 
-            for chunk in chunks:
+            collected = []
 
-                try:
-                    summary = summarize_chunk(chunk)
+            with ThreadPoolExecutor(max_workers=3) as executor:
+                futures = [executor.submit(summarize_chunk, c) for c in chunks]
+
+                for future in as_completed(futures):
+                    summary = future.result()
 
                     if summary:
+                        collected.append(summary)
                         yield f"data: {summary}\n\n"
 
-                        # 🔥 prevents connection drop
-                        time.sleep(0.3)
+            # 🔥 SAVE FINAL SUMMARY
+            final_summary = " ".join(collected)
+            doc.summary_en = final_summary
+            doc.save()
 
-                except Exception as e:
-                    yield f"data: Error: {str(e)}\n\n"
-
-            # ✅ END SIGNAL
             yield "data: [DONE]\n\n"
 
-        response = StreamingHttpResponse(
-            generate(),
-            content_type="text/event-stream"
-        )
-
-        # 🔥 IMPORTANT HEADERS
-        response["Cache-Control"] = "no-cache"
-        response["X-Accel-Buffering"] = "no"
-
-        return response
-
-    except Document.DoesNotExist:
-        return StreamingHttpResponse(
-            "data: Error: Document not found\n\n",
-            content_type="text/event-stream"
-        )
+        return StreamingHttpResponse(generate(), content_type="text/event-stream")
 
     except Exception as e:
         return StreamingHttpResponse(
@@ -71,7 +56,7 @@ def stream_summary(request, doc_id):
 
 
 # =====================================================
-# 🔥 FULL DOCUMENT ANALYSIS (PARALLEL)
+# 🔥 FULL ANALYSIS (PERSISTENT)
 # =====================================================
 class AnalyzeDocumentView(APIView):
 
@@ -83,41 +68,120 @@ class AnalyzeDocumentView(APIView):
             if not doc_id:
                 return Response({"error": "document_id required"}, status=400)
 
-            doc = Document.objects.get(id=doc_id)
+            # 🔐 SECURE QUERY
+            doc = Document.objects.get(id=doc_id, user=request.user)
             text = doc.extracted_text
 
-            with ThreadPoolExecutor(max_workers=2) as executor:
+            with ThreadPoolExecutor(max_workers=4) as executor:
 
-                future_summary = executor.submit(generate_summary, text)
-                future_entities = executor.submit(extract_entities, text)
-                future_acts = executor.submit(detect_acts_sections, text)
-                future_doc_type = executor.submit(classify_document, text)
+                futures = {
+                    "summary": executor.submit(generate_summary, text),
+                    "entities": executor.submit(extract_entities, text),
+                    "acts": executor.submit(detect_acts_sections, text),
+                    "doc_type": executor.submit(classify_document, text),
+                }
 
-                summary = future_summary.result()
-                entities = future_entities.result()
-                acts = future_acts.result()
-                document_type = future_doc_type.result()
+                results = {k: f.result() for k, f in futures.items()}
 
-            sections = [a["section"] for a in acts]
+            # 🔥 RISK
+            sections = [a["section"] for a in results["acts"]]
 
-            risk = calculate_risk(text, sections, entities)
+            risk = calculate_risk(
+                text,
+                sections,
+                results["entities"]
+            )
 
-            # SAVE
-            doc.doc_type = document_type
+            # =====================================================
+            # 🔥 SAVE EVERYTHING (IMPORTANT)
+            # =====================================================
+            doc.summary_en = results["summary"]["SUMMARY"]
+            doc.entities = results["entities"]
+            doc.acts = results["acts"]
+            doc.doc_type = results["doc_type"]
             doc.risk_level = risk["risk_level"]
+            doc.risk_score = risk["risk_score"]
+
             doc.save()
 
             return Response({
-                "document_type": document_type,
-                "summary": summary,
-                "entities": entities,
-                "acts": acts,
+                "document_type": results["doc_type"],
+                "summary": results["summary"],
+                "entities": results["entities"],
+                "acts": results["acts"],
                 "risk_level": risk["risk_level"],
-                "risk_score": risk["risk_score"]
+                "risk_score": risk["risk_score"],
+                "risk_factors": risk.get("risk_factors", [])
             })
 
         except Document.DoesNotExist:
             return Response({"error": "Document not found"}, status=404)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+
+# =====================================================
+# 🔥 FETCH SAVED ANALYSIS (VERY IMPORTANT)
+# =====================================================
+class GetDocumentAnalysis(APIView):
+
+    def get(self, request, doc_id):
+
+        try:
+            doc = Document.objects.get(id=doc_id, user=request.user)
+
+            return Response({
+                "summary": doc.summary_en,
+                "entities": doc.entities,
+                "acts": doc.acts,
+                "risk_level": doc.risk_level,
+                "risk_score": doc.risk_score,
+                "document_type": doc.doc_type
+            })
+
+        except Document.DoesNotExist:
+            return Response({"error": "Not found"}, status=404)
+
+
+# =====================================================
+# 🌍 TRANSLATION (WITH DB CACHE)
+# =====================================================
+class TranslateSummary(APIView):
+
+    def post(self, request):
+
+        try:
+            doc_id = request.data.get("document_id")
+            text = request.data.get("text")
+            lang = request.data.get("lang")
+
+            if not text or not lang:
+                return Response({"error": "Missing data"}, status=400)
+
+            doc = None
+
+            if doc_id:
+                doc = Document.objects.get(id=doc_id, user=request.user)
+
+                field_name = f"summary_{lang}"
+
+                if hasattr(doc, field_name):
+                    cached = getattr(doc, field_name)
+                    if cached:
+                        return Response({"translated_text": cached})
+
+            # 🔥 TRANSLATE
+            translated = translate_text(text, lang)
+
+            # 🔥 SAVE CACHE
+            if doc:
+                field_name = f"summary_{lang}"
+                if hasattr(doc, field_name):
+                    setattr(doc, field_name, translated)
+                    doc.save()
+
+            return Response({"translated_text": translated})
 
         except Exception as e:
             return Response({"error": str(e)}, status=500)

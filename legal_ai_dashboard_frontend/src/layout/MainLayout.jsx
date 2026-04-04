@@ -7,20 +7,15 @@ export default function MainLayout({ children }) {
 
     <div className="flex h-screen overflow-hidden">
 
-      {/* SIDEBAR */}
       <Sidebar />
 
-      {/* RIGHT SIDE */}
       <div className="flex-1 flex flex-col">
 
-        {/* NAVBAR */}
         <Navbar />
 
-        {/* 🌈 MAIN BACKGROUND */}
         <div className="flex-1 bg-main p-4 overflow-y-auto">
 
-          {/* 💎 GLASS WRAPPER */}
-          <div className="glass p-6 min-h-full">
+          <div className="glass p-6 min-h-full rounded-2xl">
 
             {children}
 

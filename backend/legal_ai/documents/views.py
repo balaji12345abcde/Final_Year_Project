@@ -1,17 +1,48 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import api_view
 
+from django.http import JsonResponse
 from .models import Document
 from .utils import extract_pdf_text
 
+import threading
 
-# ==========================
-# 📤 Upload Document
-# ==========================
+
+# =====================================================
+# 🔥 BACKGROUND PDF PROCESSING
+# =====================================================
+def process_pdf(document, file):
+    try:
+        text = extract_pdf_text(file)
+        document.extracted_text = text
+        document.save()
+    except Exception as e:
+        print("PDF processing error:", e)
+
+
+# =====================================================
+# 🗑️ DELETE DOCUMENT (SECURE)
+# =====================================================
+@api_view(["DELETE"])
+def delete_document(request, doc_id):
+    try:
+        doc = Document.objects.get(id=doc_id, user=request.user)
+        doc.delete()
+
+        return Response({"message": "Deleted successfully"})
+
+    except Document.DoesNotExist:
+        return Response({"error": "Document not found"}, status=404)
+
+
+# =====================================================
+# 📤 UPLOAD DOCUMENT (FAST + SAFE)
+# =====================================================
 class UploadDocumentView(APIView):
 
-    permission_classes = [IsAuthenticated]  # 🔐 user required
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
 
@@ -20,13 +51,27 @@ class UploadDocumentView(APIView):
         if not uploaded_file:
             return Response({"error": "No file uploaded"}, status=400)
 
-        text = extract_pdf_text(uploaded_file)
+        # 🔥 FILE TYPE CHECK
+        if not uploaded_file.name.lower().endswith(".pdf"):
+            return Response({"error": "Only PDF files allowed"}, status=400)
 
+        # 🔥 FILE SIZE LIMIT (10MB)
+        if uploaded_file.size > 10 * 1024 * 1024:
+            return Response({"error": "File too large (Max 10MB)"}, status=400)
+
+        # 🔥 CREATE EMPTY DOCUMENT (FAST RESPONSE)
         document = Document.objects.create(
-    user=request.user,   # 🔥 MUST ADD
-    file=uploaded_file,
-    extracted_text=text
-)
+            user=request.user,
+            file=uploaded_file,
+            extracted_text=""
+        )
+
+        # 🔥 BACKGROUND PROCESSING
+        threading.Thread(
+            target=process_pdf,
+            args=(document, uploaded_file),
+            daemon=True
+        ).start()
 
         return Response({
             "message": "File uploaded successfully",
@@ -34,37 +79,53 @@ class UploadDocumentView(APIView):
         })
 
 
-# ==========================
-# 📊 Dashboard API
-# ==========================
+# =====================================================
+# 📊 DASHBOARD API (OPTIMIZED)
+# =====================================================
 class DashboardView(APIView):
 
-    permission_classes = [IsAuthenticated]  # 🔐 user required
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
 
-        # 🔥 FILTER BY USER
-        docs = Document.objects.filter(user=request.user).order_by("-created_at")
+        docs = Document.objects.filter(user=request.user).only(
+            "id", "file", "created_at", "doc_type", "risk_level"
+        ).order_by("-created_at")
+
+        # 🔥 EMPTY CASE HANDLING
+        if not docs.exists():
+            return Response({
+                "total_documents": 0,
+                "document_type": "N/A",
+                "risk_level": "N/A",
+                "history": [],
+                "chart_data": []
+            })
 
         total_docs = docs.count()
-
         latest_doc = docs.first()
 
-        document_type = latest_doc.doc_type if latest_doc and latest_doc.doc_type else "N/A"
-        risk_level = latest_doc.risk_level if latest_doc and latest_doc.risk_level else "Low"
+        document_type = latest_doc.doc_type if latest_doc.doc_type else "N/A"
+        risk_level = latest_doc.risk_level if latest_doc.risk_level else "Low"
 
-        # 📜 History
+        # =========================
+        # 📜 HISTORY (LATEST 5)
+        # =========================
         history = [
             {
+                "id": d.id,
                 "name": d.file.name.split("/")[-1],
                 "date": d.created_at.strftime("%d %b")
             }
             for d in docs[:5]
         ]
 
-        # 📊 Chart data (document types count)
+        # =========================
+        # 📊 CHART DATA (LIMITED)
+        # =========================
         type_counts = {}
-        for d in docs:
+
+        for d in docs[:50]:  # 🔥 LIMIT FOR PERFORMANCE
             t = d.doc_type if d.doc_type else "Unknown"
             type_counts[t] = type_counts.get(t, 0) + 1
 
@@ -78,5 +139,5 @@ class DashboardView(APIView):
             "document_type": document_type,
             "risk_level": risk_level,
             "history": history,
-            "chart_data": chart_data  # 🔥 NEW
+            "chart_data": chart_data
         })

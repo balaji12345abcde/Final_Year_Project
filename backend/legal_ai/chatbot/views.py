@@ -1,13 +1,10 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-
+from .document_chat import ask_document
 from documents.models import Document
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from documents.models import Document
-from transformers import pipeline
-
-qa_pipeline = pipeline("question-answering")
 
 class DocumentChatbot(APIView):
 
@@ -20,23 +17,14 @@ class DocumentChatbot(APIView):
 
         context = doc.extracted_text
 
-        result = qa_pipeline(
-            question=question,
-            context=context
-        )
+        result = ask_document(document_id, context, question)
 
         return Response({
-            "answer": result["answer"]
+            "answer": result
         })
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from transformers import pipeline
-
-# load once when server starts
-legal_generator = pipeline(
-    "text2text-generation",
-    model="google/flan-t5-base"
-)
+from .general_chat import Generalchatbot
 
 class GeneralChatbot(APIView):
 
@@ -44,22 +32,7 @@ class GeneralChatbot(APIView):
 
         question = request.data.get("question")
 
-        if not question:
-            return Response({"answer": "Please ask a legal question."})
-
-        prompt = f"""
-        You are a legal assistent.
-        Explain the following legal question clearly in simple terms.
-
-        Question: {question}
-
-        Give a detailed explaination including punishment if applicable.
-        """
-
-        result = legal_generator(prompt, max_length=256,do_sample=True,temperature=0.7,top_p=0.9)
-
-        answer = result[0]["generated_text"]
-
+        answer=Generalchatbot(question)
         return Response({
             "answer": answer
         })

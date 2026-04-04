@@ -1,10 +1,16 @@
 import { useParams } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import MainLayout from "../layout/MainLayout";
 import DocumentChatbot from "../components/DocumentChatbot";
 import { motion } from "framer-motion";
 
-import { streamSummary, analyzeDocument } from "../api/api";
+import {
+  translateSummary,
+  streamSummary,
+  analyzeDocument,
+  getAnalysis
+} from "../api/api";
+
 import { useAnalysis } from "../context/AnalysisContext";
 
 export default function SummaryPage() {
@@ -12,74 +18,157 @@ export default function SummaryPage() {
   const { docId: paramDocId } = useParams();
 
   const {
-    summaryChunks,
-    setSummaryChunks,
-    analysisData,
-    setAnalysisData,
+    summaryData,
+    setSummaryData,
     docId,
     loadDocument
   } = useAnalysis();
 
   const [loading, setLoading] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
-  const [isFinished, setIsFinished] = useState(false);
 
+  const [translatedChunks, setTranslatedChunks] = useState([]);
+  const [selectedLang, setSelectedLang] = useState("");
+  const [translating, setTranslating] = useState(false);
+
+  const eventSourceRef = useRef(null);
+
+  // =========================
+  // 🔥 STREAM HANDLER
+  // =========================
+  const handleStreamChunk = (chunk) => {
+
+    if (chunk === "[DONE]") {
+
+      setSummaryData(prev => ({
+        ...prev,
+        isFinished: true
+      }));
+
+      setLoading(false);
+      eventSourceRef.current?.close();
+      return;
+    }
+
+    setSummaryData(prev => {
+
+      if (prev.chunks.includes(chunk)) return prev;
+
+      return {
+        ...prev,
+        chunks: [...prev.chunks, chunk]
+      };
+    });
+  };
+
+  const handleTranslate = async (lang) => {
+
+    setSelectedLang(lang);
+
+    if (!lang) {
+      setTranslatedChunks([]);
+      return;
+    }
+
+    setTranslating(true);
+
+    try {
+      const fullText = summaryData.chunks.join(" ");
+
+      // ✅ FIX: pass docId
+      const res = await translateSummary(fullText, lang, paramDocId);
+
+      setTranslatedChunks(res.translated_text.split(". "));
+    } catch (err) {
+      console.error(err);
+    }
+
+    setTranslating(false);
+  };
+  useEffect(() => {
+    setTranslatedChunks([]);
+  }, [paramDocId]);
+  // =========================
+  // 🔥 MAIN LOGIC (FIXED)
+  // =========================
   useEffect(() => {
 
-    // =====================================
-    // 🔥 LOAD DOCUMENT INTO CONTEXT
-    // =====================================
+    if (!paramDocId) return;
+
+    // 🔄 load context
     if (docId !== paramDocId) {
       loadDocument(paramDocId);
-      return;
     }
 
-    // =====================================
-    // 🔥 RESET STATES WHEN NEW DOC
-    // =====================================
-    setIsFinished(false);
+    // 🔥 STEP 1: Try DB FIRST
+    const fetchSaved = async () => {
 
-    // =====================================
-    // ✅ IF DATA EXISTS → SKIP FETCH
-    // =====================================
-    if (summaryChunks.length > 0 && analysisData) {
-      return;
-    }
+      try {
+        const res = await getAnalysis(paramDocId);
 
-    setLoading(true);
+        if (res.summary) {
+          setSummaryData({
+            chunks: [res.summary],
+            isFinished: true
+          });
 
-    // =====================================
-    // 🔥 RUN ANALYSIS (BACKGROUND)
-    // =====================================
-    analyzeDocument(paramDocId)
-      .then((res) => {
-        setAnalysisData(res);
-      })
-      .catch(console.error);
+          return true; // already done
+        }
 
-    // =====================================
-    // 🔥 STREAM SUMMARY
-    // =====================================
-    const eventSource = streamSummary(paramDocId, (chunk) => {
+      } catch (err) {
+        console.log("No saved data, generating...");
+      }
 
-      if (chunk === "[DONE]") {
-        setIsFinished(true);
+      return false;
+    };
+
+    const init = async () => {
+
+      setLoading(true);
+
+      const exists = await fetchSaved();
+
+      if (exists) {
         setLoading(false);
         return;
       }
 
-      setSummaryChunks((prev) => [...prev, chunk]);
-      setLoading(false);
+      // 🔥 STEP 2: RUN ANALYSIS
+      await analyzeDocument(paramDocId);
 
-    }, (err) => {
-      console.error("Streaming error:", err);
-      setLoading(false);
-    });
+      // 🔥 STEP 3: START STREAM (UI only)
+      eventSourceRef.current = streamSummary(
+        paramDocId,
+        handleStreamChunk,
+        () => setLoading(false)
+      );
+    };
 
-    return () => eventSource.close();
+    init();
 
-  }, [paramDocId, docId]);
+    return () => {
+      eventSourceRef.current?.close();
+    };
 
+  }, [paramDocId]);
+
+  // =========================
+  // 🔥 DISPLAY DATA
+  // =========================
+  const displayData =
+    translatedChunks.length > 0
+      ? translatedChunks
+      : summaryData.chunks;
+
+  const sentences = displayData
+    .join(" ")
+    .split(". ")
+    .filter(Boolean)
+    .filter((v, i, arr) => arr.indexOf(v) === i);
+
+  // =========================
+  // UI
+  // =========================
   return (
 
     <MainLayout>
@@ -87,81 +176,83 @@ export default function SummaryPage() {
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="max-w-4xl"
+        className="max-w-5xl mx-auto"
       >
 
-        {/* Header */}
+        {/* HEADER */}
         <div className="flex justify-between items-center mb-6">
 
-          <h1 className="text-2xl font-bold">
-            Live Document Summary ⚡
+          <h1 className="text-3xl font-bold text-white">
+            ⚡ AI Legal Summary
           </h1>
 
-          <button
-            onClick={() => setChatOpen(true)}
-            className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
-          >
-            Open Chatbot
-          </button>
+          <div className="flex gap-3">
+
+            <button
+              onClick={() => setChatOpen(true)}
+              className="bg-green-500 text-white px-4 py-2 rounded-lg"
+            >
+              🤖 Chat
+            </button>
+
+            <select
+              value={selectedLang}
+              onChange={(e) => handleTranslate(e.target.value)}
+              className="px-3 py-2 rounded-lg"
+            >
+              <option value="">🌐 English</option>
+              <option value="ta">Tamil</option>
+              <option value="hi">Hindi</option>
+              <option value="fr">French</option>
+            </select>
+
+          </div>
 
         </div>
 
-        {/* 🔄 Loading */}
-        {loading && summaryChunks.length === 0 && (
-          <p className="text-gray-500 animate-pulse">
-            Generating summary...
+        {/* LOADING */}
+        {loading && summaryData.chunks.length === 0 && (
+          <p className="text-white animate-pulse">
+            ⚡ Analyzing your document...
           </p>
         )}
 
-        {/* ✅ Summary */}
-        <div className="bg-white p-6 rounded shadow mb-6 min-h-[150px]">
+        {/* TRANSLATION LOADING */}
+        {translating && (
+          <p className="text-blue-400 mb-2">
+            🌐 Translating...
+          </p>
+        )}
 
-          {/* No data */}
-          {summaryChunks.length === 0 && !loading && (
-            <p className="text-gray-400">
-              No summary available
-            </p>
-          )}
+        {/* MAIN CARD */}
+        <div className="bg-white/90 p-8 rounded-2xl shadow-xl">
 
-          {/* 🔥 STREAMING STATUS */}
-          {!isFinished && summaryChunks.length > 0 && (
+          {!summaryData.isFinished && summaryData.chunks.length > 0 && (
             <p className="text-blue-500 mb-4 animate-pulse">
-              Streaming more content...
+              ⚡ Generating insights...
             </p>
           )}
 
-          {/* 🔥 SUMMARY CHUNKS */}
-          {summaryChunks.map((chunk, index) => (
+          <div className="text-gray-800 text-[17px] leading-loose">
 
-            <div
-              key={index}
-              className="mb-6 p-4 bg-gray-50 rounded-lg border-l-4 border-indigo-500"
-            >
+            {sentences.map((line, i) => (
+              <motion.p key={i} className="mb-3">
+                {line}.
+              </motion.p>
+            ))}
 
-              <h4 className="text-sm text-gray-500 mb-2">
-                Part {index + 1}
-              </h4>
+          </div>
 
-              <p className="text-gray-700 leading-relaxed whitespace-pre-line">
-                {chunk}
-              </p>
-
-            </div>
-
-          ))}
-
-          {/* ✅ DONE MESSAGE */}
-          {isFinished && (
-            <p className="text-green-600 font-semibold mt-4">
+          {summaryData.isFinished && (
+            <div className="mt-6 text-green-600 font-semibold">
               ✅ Summary Complete
-            </p>
+            </div>
           )}
 
         </div>
 
       </motion.div>
 
-      {/* 🤖 Chatbot */}
       {chatOpen && (
         <DocumentChatbot
           docId={paramDocId}
